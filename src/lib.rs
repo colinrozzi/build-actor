@@ -1,272 +1,147 @@
 mod bindings;
-mod handlers;
-/// Content Filesystem Actor (Runtime Store Integration)
-///
-/// A content-addressable virtual filesystem with Git-like versioning capabilities.
-/// Enhanced to use the Theater runtime store directly.
-mod models;
-mod storage;
-mod utils;
-
-use bindings::ntwk::theater::runtime::log;
-use bindings::ntwk::theater::types::Json;
-use models::init::InitData;
-use models::{Request, State};
-use storage::StorageInterface;
-use utils::error_response;
-
-use models::{BranchInfo, ProjectInfo};
-use std::collections::HashMap;
 
 use bindings::exports::ntwk::theater::actor::Guest;
 use bindings::exports::ntwk::theater::message_server_client::Guest as MessageServerClient;
+use bindings::ntwk::theater::filesystem;
+use bindings::ntwk::theater::message_server_host::request;
+use bindings::ntwk::theater::message_server_host::send;
+use bindings::ntwk::theater::runtime::log;
+use bindings::ntwk::theater::types::Json;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::collections::HashMap;
 
-/// Main component implementation for the runtime-content-fs actor
+/// State structure for the build actor
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct State {
+    // The address to which build results should be sent
+    callback_address: String,
+
+    // Virtual filesystem reference (content-fs actor ID)
+    fs_hash: String,
+
+    // Build status
+    status: BuildStatus,
+
+    // Build output information
+    build_output: Option<BuildOutput>,
+}
+
+/// Status of the build process
+#[derive(Debug, Serialize, Deserialize, Clone)]
+enum BuildStatus {
+    NotStarted,
+    Extracting,
+    Building,
+    Completed,
+    Failed,
+}
+
+/// Structure to hold build result information
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct BuildOutput {
+    success: bool,
+    stdout: String,
+    stderr: String,
+    wasm_path: Option<String>,
+    wasm_hash: Option<String>,
+    build_logs: Vec<String>,
+    error: Option<String>,
+}
+
+/// Structure to hold virtual file system operation requests
+#[derive(Debug, Serialize, Deserialize)]
+struct VfsRequest {
+    action: String,
+    project: Option<String>,
+    branch: Option<String>,
+    params: Value,
+}
+
+/// Structure to hold virtual file system operation responses
+#[derive(Debug, Serialize, Deserialize)]
+struct VfsResponse {
+    status: String,
+    data: Value,
+    error: Option<String>,
+}
+
+/// Structure representing a directory entry
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct DirectoryEntry {
+    name: String,
+    #[serde(rename = "type")]
+    entry_type: String,
+    path: String,
+}
+
+/// Main component implementation
 struct Component;
 
 impl Guest for Component {
-    /// Initialize the component
+    /// Initialize the build actor
     fn init(init_data: Option<Json>, _params: (String,)) -> Result<(Option<Json>,), String> {
-        log("runtime-content-fs: Initializing");
+        log("build-actor: Initializing");
 
-        // Parse initialization data if provided
-        let state = if let Some(data) = init_data {
-            match serde_json::from_slice::<InitData>(&data) {
-                Ok(init) => {
-                    log("runtime-content-fs: Found initialization data");
-                    // Create a new state
-                    let mut state = State::default();
+        // Parse initialization data
+        if let Some(data) = init_data {
+            match serde_json::from_slice::<Value>(&data) {
+                Ok(config) => {
+                    // Extract required parameters
+                    let fs_hash = match config.get("fs_hash").and_then(|v| v.as_str()) {
+                        Some(hash) => hash.to_string(),
+                        None => return Err("Missing required parameter 'fs_hash'".to_string()),
+                    };
 
-                    // Check if we should create a new filesystem
-                    let create_new = init.create_new.unwrap_or(false);
-
-                    if create_new {
-                        log("runtime-content-fs: Creating new filesystem");
-
-                        // Create default project with customized name if provided
-                        let project_name = init
-                            .default_project_name
-                            .unwrap_or_else(|| "default".to_string());
-                        let project_description = init
-                            .default_project_description
-                            .unwrap_or_else(|| "Default project".to_string());
-
-                        // Create main branch
-                        let main_branch = BranchInfo {
-                            name: "main".to_string(),
-                            head: None,
-                        };
-
-                        let mut branches = HashMap::new();
-                        branches.insert("main".to_string(), main_branch);
-
-                        // Create the project
-                        let project = ProjectInfo {
-                            name: project_name.clone(),
-                            description: project_description,
-                            branches,
-                            default_branch: "main".to_string(),
-                        };
-
-                        // Add project to state
-                        state.projects.insert(project_name.clone(), project);
-
-                        // Set as active project and branch
-                        state.active_context.project = project_name;
-                        state.active_context.branch = "main".to_string();
-                        state.active_context.working_tree = HashMap::new();
-
-                        // Initialize storage
-                        let storage = StorageInterface::new();
-
-                        // Store initial project list
-                        match storage.store_project_list(&[state.active_context.project.clone()]) {
-                            Ok(_) => log("runtime-content-fs: Stored project list"),
-                            Err(e) => log(&format!(
-                                "runtime-content-fs: Failed to store project list: {}",
-                                e
-                            )),
+                    let callback_address = match config
+                        .get("callback_address")
+                        .and_then(|v| v.as_str())
+                    {
+                        Some(addr) => addr.to_string(),
+                        None => {
+                            return Err("Missing required parameter 'callback_address'".to_string())
                         }
+                    };
 
-                        // Store project info
-                        match storage.store_project_info(
-                            &state.active_context.project,
-                            &serde_json::to_value(
-                                &state.projects.get(&state.active_context.project).unwrap(),
-                            )
-                            .unwrap(),
-                        ) {
-                            Ok(_) => log("runtime-content-fs: Stored project info"),
-                            Err(e) => log(&format!(
-                                "runtime-content-fs: Failed to store project info: {}",
-                                e
-                            )),
-                        }
+                    // Create initial state
+                    let mut state = State {
+                        callback_address,
+                        fs_hash,
+                        status: BuildStatus::NotStarted,
+                        build_output: None,
+                    };
 
-                        // Store branch list
-                        match storage
-                            .store_branch_list(&state.active_context.project, &["main".to_string()])
-                        {
-                            Ok(_) => log("runtime-content-fs: Stored branch list"),
-                            Err(e) => log(&format!(
-                                "runtime-content-fs: Failed to store branch list: {}",
-                                e
-                            )),
-                        }
+                    // Serialize and return state
+                    match serde_json::to_vec(&state) {
+                        Ok(state_bytes) => {
+                            log("build-actor: Initialized successfully");
 
-                        // Store branch info
-                        match storage.store_branch_info(
-                            &state.active_context.project,
-                            "main",
-                            &serde_json::to_value(
-                                &state
-                                    .projects
-                                    .get(&state.active_context.project)
-                                    .unwrap()
-                                    .branches
-                                    .get("main")
-                                    .unwrap(),
-                            )
-                            .unwrap(),
-                        ) {
-                            Ok(_) => log("runtime-content-fs: Stored branch info"),
-                            Err(e) => log(&format!(
-                                "runtime-content-fs: Failed to store branch info: {}",
-                                e
-                            )),
-                        }
-
-                        // Create root directory
-                        use crate::models::FSNode;
-                        use crate::models::NodeType;
-
-                        let root_dir = FSNode {
-                            entries: Some(HashMap::new()),
-                            content: None,
-                            node_type: NodeType::Directory,
-                        };
-
-                        let root_hash = match storage.store_node(&root_dir) {
-                            Ok(hash) => hash,
-                            Err(e) => {
-                                log(&format!(
-                                    "runtime-content-fs: Failed to store root directory: {}",
-                                    e
-                                ));
-                                return Err(format!("Failed to store root directory: {}", e));
-                            }
-                        };
-
-                        // Create working tree with root directory
-                        let mut working_tree = HashMap::new();
-                        working_tree.insert("/".to_string(), root_hash.clone());
-
-                        // Store working tree
-                        match storage.store_working_tree(
-                            &state.active_context.project,
-                            "main",
-                            &working_tree,
-                        ) {
-                            Ok(_) => log("runtime-content-fs: Stored empty working tree"),
-                            Err(e) => log(&format!(
-                                "runtime-content-fs: Failed to store working tree: {}",
-                                e
-                            )),
-                        }
-
-                        log("runtime-content-fs: New filesystem created successfully");
-                    } else {
-                        // Using existing filesystem
-                        // Set active project if provided and exists
-                        if let Some(project) = init.root_project {
-                            log(&format!(
-                                "runtime-content-fs: Setting active project: {}",
-                                project
-                            ));
-
-                            // Get project list from storage
-                            let storage = StorageInterface::new();
-                            match storage.get_project_list() {
-                                Ok(projects) => {
-                                    if projects.contains(&project) {
-                                        state.active_context.project = project;
-                                    } else {
-                                        log(&format!(
-                                            "runtime-content-fs: Project not found: {}",
-                                            project
-                                        ));
-                                    }
-                                }
+                            // Start the build process
+                            match start_build(&mut state) {
+                                Ok(_) => log("build-actor: Build process started"),
                                 Err(e) => log(&format!(
-                                    "runtime-content-fs: Failed to get project list: {}",
+                                    "build-actor: Failed to start build process: {}",
                                     e
                                 )),
                             }
-                        }
 
-                        // Set active branch if provided and exists
-                        if let Some(branch) = init.default_branch {
-                            log(&format!(
-                                "runtime-content-fs: Setting active branch: {}",
-                                branch
-                            ));
-
-                            let storage = StorageInterface::new();
-                            match storage.get_branch_list(&state.active_context.project) {
-                                Ok(branches) => {
-                                    if branches.contains(&branch) {
-                                        state.active_context.branch = branch;
-                                    } else {
-                                        log(&format!(
-                                            "runtime-content-fs: Branch not found: {}",
-                                            branch
-                                        ));
-                                    }
-                                }
-                                Err(e) => log(&format!(
-                                    "runtime-content-fs: Failed to get branch list: {}",
-                                    e
-                                )),
-                            }
+                            Ok((Some(state_bytes),))
                         }
+                        Err(e) => Err(format!("Failed to serialize state: {}", e)),
                     }
-
-                    state
                 }
-                Err(e) => {
-                    log(&format!(
-                        "runtime-content-fs: Failed to parse init data: {}",
-                        e
-                    ));
-                    State::default()
-                }
+                Err(e) => Err(format!("Failed to parse initialization data: {}", e)),
             }
         } else {
-            log("runtime-content-fs: No initialization data provided, using defaults");
-            State::default()
-        };
-
-        // Serialize the initial state
-        match serde_json::to_vec(&state) {
-            Ok(state_bytes) => {
-                log("runtime-content-fs: Initialized successfully");
-                Ok((Some(state_bytes),))
-            }
-            Err(e) => {
-                log(&format!(
-                    "runtime-content-fs: Failed to serialize initial state: {}",
-                    e
-                ));
-                Err(format!("Failed to serialize initial state: {}", e))
-            }
+            Err("No initialization data provided".to_string())
         }
     }
 }
 
 impl MessageServerClient for Component {
-    /// Handle send messages (not used in this actor)
+    /// Handle send messages
     fn handle_send(state: Option<Json>, _params: (Json,)) -> Result<(Option<Json>,), String> {
-        // Just return the state unchanged
+        // Return state unchanged
         Ok((state,))
     }
 
@@ -275,18 +150,20 @@ impl MessageServerClient for Component {
         state_bytes: Option<Json>,
         params: (Json,),
     ) -> Result<(Option<Json>, (Json,)), String> {
-        log("runtime-content-fs: Received message");
+        log("build-actor: Received request");
 
-        // Deserialize state or create default
-        let mut state: State = match state_bytes {
+        // Deserialize state
+        let state: State = match state_bytes {
             Some(bytes) => match serde_json::from_slice(&bytes) {
                 Ok(s) => s,
                 Err(e) => {
                     log(&format!("Failed to deserialize state: {}", e));
-                    State::default()
+                    return Err(format!("Failed to deserialize state: {}", e));
                 }
             },
-            None => State::default(),
+            None => {
+                return Err("No state available".to_string());
+            }
         };
 
         // Process the request
@@ -295,216 +172,466 @@ impl MessageServerClient for Component {
             Ok(s) => s,
             Err(e) => {
                 log(&format!("Invalid UTF-8 in request: {}", e));
-                return Ok((
-                    Some(serde_json::to_vec(&state).unwrap()),
-                    (error_response("Invalid UTF-8 in request").into_bytes(),),
-                ));
+                return Err(format!("Invalid UTF-8 in request: {}", e));
             }
         };
 
-        // Process request and get response
-        let response = match process_request(&mut state, request_str) {
-            Ok(resp) => resp,
-            Err(e) => error_response(&format!("Error processing request: {}", e)),
+        log(&format!("Request content: {}", request_str));
+
+        // Parse the request
+        let request: Value = match serde_json::from_str(request_str) {
+            Ok(req) => req,
+            Err(e) => {
+                log(&format!("Invalid request JSON: {}", e));
+                return Err(format!("Invalid request JSON: {}", e));
+            }
         };
 
-        // Return updated state and response
+        // Handle various request types
+        let action = request["action"].as_str().unwrap_or("status");
+
+        let response = match action {
+            "status" => {
+                // Return current build status
+                json!({
+                    "status": "ok",
+                    "data": {
+                        "build_status": format!("{:?}", state.status),
+                        "output": state.build_output
+                    }
+                })
+            }
+            _ => {
+                // Unknown action
+                json!({
+                    "status": "error",
+                    "error": format!("Unknown action: {}", action)
+                })
+            }
+        };
+
+        // Return state unchanged and response
         Ok((
             Some(serde_json::to_vec(&state).unwrap()),
-            (response.into_bytes(),),
+            (serde_json::to_vec(&response).unwrap(),),
         ))
     }
 }
 
-/// Process a request and return a response
-fn process_request(state: &mut State, request_json: &str) -> Result<String, String> {
-    log(&format!("Processing request: {}", request_json));
+/// Function to start the build process
+fn start_build(state: &mut State) -> Result<(), String> {
+    log("Starting build process");
 
-    // Parse the request
-    let request: Request = match serde_json::from_str(request_json) {
-        Ok(req) => req,
-        Err(e) => {
-            return Ok(error_response(&format!("Invalid request JSON: {}", e)));
-        }
-    };
+    // First update state to reflect that we're starting
+    let mut updated_state = state.clone();
+    updated_state.status = BuildStatus::Extracting;
 
-    // Set context from request
-    if let Some(project) = &request.project {
-        // Validate project exists using storage
-        let storage = StorageInterface::new();
-        let projects = match storage.get_project_list() {
-            Ok(p) => p,
-            Err(e) => {
-                return Ok(error_response(&format!(
-                    "Failed to get project list: {}",
-                    e
-                )))
+    match serde_json::to_vec(&updated_state) {
+        Ok(state_bytes) => {
+            // Begin extracting files from virtual filesystem
+            let fs_hash = &state.fs_hash;
+
+            // Directory listing from root
+            match list_directory(fs_hash, "/") {
+                Ok(entries) => {
+                    log(&format!("Found {} entries at root", entries.len()));
+
+                    // Process entries recursively
+                    match process_directory(fs_hash, "/", &entries) {
+                        Ok(_) => {
+                            log("Successfully extracted all files from virtual filesystem");
+
+                            // Update state to reflect we're now building
+                            let mut building_state = updated_state.clone();
+                            building_state.status = BuildStatus::Building;
+
+                            if let Err(e) = serde_json::to_vec(&building_state) {
+                                log(&format!("Failed to serialize building state: {}", e));
+                            }
+
+                            // Start the build process
+                            match execute_build() {
+                                Ok(build_output) => {
+                                    log(&format!(
+                                        "Build completed with success={}",
+                                        build_output.success
+                                    ));
+
+                                    // Update state with build output
+                                    let mut final_state = building_state.clone();
+                                    final_state.build_output = Some(build_output.clone());
+                                    final_state.status = if build_output.success {
+                                        BuildStatus::Completed
+                                    } else {
+                                        BuildStatus::Failed
+                                    };
+
+                                    // Serialize final state
+                                    if let Err(e) = serde_json::to_vec(&final_state) {
+                                        log(&format!("Failed to serialize final state: {}", e));
+                                    }
+
+                                    // Send build results to callback address
+                                    send_build_results(&state.callback_address, &build_output);
+
+                                    Ok(())
+                                }
+                                Err(e) => {
+                                    log(&format!("Build failed: {}", e));
+
+                                    // Update state to reflect failure
+                                    let mut failed_state = building_state.clone();
+                                    failed_state.status = BuildStatus::Failed;
+                                    failed_state.build_output = Some(BuildOutput {
+                                        success: false,
+                                        stdout: String::new(),
+                                        stderr: String::new(),
+                                        wasm_path: None,
+                                        wasm_hash: None,
+                                        build_logs: vec![],
+                                        error: Some(e.clone()),
+                                    });
+
+                                    // Serialize failed state
+                                    if let Err(e) = serde_json::to_vec(&failed_state) {
+                                        log(&format!("Failed to serialize failed state: {}", e));
+                                    }
+
+                                    // Send failure result
+                                    send_build_results(
+                                        &state.callback_address,
+                                        &BuildOutput {
+                                            success: false,
+                                            stdout: String::new(),
+                                            stderr: String::new(),
+                                            wasm_path: None,
+                                            wasm_hash: None,
+                                            build_logs: vec![],
+                                            error: Some(e),
+                                        },
+                                    );
+
+                                    Err("Build failed".to_string())
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log(&format!("Failed to process directories: {}", e));
+                            Err(format!("Failed to process directories: {}", e))
+                        }
+                    }
+                }
+                Err(e) => {
+                    log(&format!("Failed to list root directory: {}", e));
+                    Err(format!("Failed to list root directory: {}", e))
+                }
             }
+        }
+        Err(e) => {
+            log(&format!("Failed to serialize updated state: {}", e));
+            Err(format!("Failed to serialize updated state: {}", e))
+        }
+    }
+}
+
+/// Function to process all entries in a directory recursively
+fn process_directory(fs_hash: &str, path: &str, entries: &[DirectoryEntry]) -> Result<(), String> {
+    for entry in entries {
+        let entry_path = if path == "/" {
+            format!("/{}", entry.name)
+        } else {
+            format!("{}/{}", path, entry.name)
         };
 
-        if !projects.contains(project) {
-            return Ok(error_response(&format!("Project '{}' not found", project)));
-        }
+        log(&format!("Processing entry: {}", entry_path));
 
-        state.active_context.project = project.clone();
+        if entry.entry_type == "directory" {
+            // Create directory
+            if let Err(e) = filesystem::create_dir(&entry_path) {
+                log(&format!("Failed to create directory {}: {}", entry_path, e));
+                return Err(format!("Failed to create directory {}: {}", entry_path, e));
+            }
+
+            // List directory contents
+            match list_directory(fs_hash, &entry_path) {
+                Ok(sub_entries) => {
+                    // Process subdirectory
+                    if let Err(e) = process_directory(fs_hash, &entry_path, &sub_entries) {
+                        return Err(e);
+                    }
+                }
+                Err(e) => {
+                    log(&format!("Failed to list directory {}: {}", entry_path, e));
+                    return Err(format!("Failed to list directory {}: {}", entry_path, e));
+                }
+            }
+        } else {
+            // Read file content
+            match read_file(fs_hash, &entry_path) {
+                Ok(content) => {
+                    // Write file to local filesystem
+                    if let Err(e) = filesystem::write_file(&entry_path, &content) {
+                        log(&format!("Failed to write file {}: {}", entry_path, e));
+                        return Err(format!("Failed to write file {}: {}", entry_path, e));
+                    }
+                }
+                Err(e) => {
+                    log(&format!("Failed to read file {}: {}", entry_path, e));
+                    return Err(format!("Failed to read file {}: {}", entry_path, e));
+                }
+            }
+        }
     }
 
-    if let Some(branch) = &request.branch {
-        // Validate branch exists using storage
-        let storage = StorageInterface::new();
-        let branches = match storage.get_branch_list(&state.active_context.project) {
-            Ok(b) => b,
-            Err(e) => return Ok(error_response(&format!("Failed to get branch list: {}", e))),
+    Ok(())
+}
+
+/// Function to list directory contents in the virtual filesystem
+fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, String> {
+    // Create request
+    let vfs_request = VfsRequest {
+        action: "list-directory".to_string(),
+        project: None, // Project and branch handled by the content-fs actor
+        branch: None,
+        params: json!({
+            "path": path
+        }),
+    };
+
+    // Send request
+    let request_bytes = serde_json::to_vec(&vfs_request)
+        .map_err(|e| format!("Failed to serialize directory listing request: {}", e))?;
+
+    let response_bytes = request(&fs_hash.to_string(), &request_bytes)
+        .map_err(|e| format!("Failed to send directory listing request: {}", e))?;
+
+    // Parse response
+    let response: VfsResponse = serde_json::from_slice(&response_bytes)
+        .map_err(|e| format!("Failed to parse directory listing response: {}", e))?;
+
+    if response.status != "ok" {
+        return Err(response
+            .error
+            .unwrap_or_else(|| "Unknown error".to_string()));
+    }
+
+    // Extract entries
+    let entries = response
+        .data
+        .get("entries")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "Missing or invalid 'entries' field in response".to_string())?;
+
+    // Parse entries
+    let mut result = Vec::new();
+    for entry in entries {
+        let name = entry
+            .get("name")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "Missing or invalid 'name' field in entry".to_string())?;
+
+        let entry_type = entry.get("type").and_then(|v| v.as_str()).unwrap_or("file");
+
+        let entry_path = if path == "/" {
+            format!("/{}", name)
+        } else {
+            format!("{}/{}", path, name)
         };
 
-        if !branches.contains(branch) {
-            return Ok(error_response(&format!("Branch '{}' not found", branch)));
+        result.push(DirectoryEntry {
+            name: name.to_string(),
+            entry_type: entry_type.to_string(),
+            path: entry_path,
+        });
+    }
+
+    Ok(result)
+}
+
+/// Function to read a file from the virtual filesystem
+fn read_file(fs_hash: &str, path: &str) -> Result<String, String> {
+    // Create request
+    let vfs_request = VfsRequest {
+        action: "read-file".to_string(),
+        project: None, // Project and branch handled by the content-fs actor
+        branch: None,
+        params: json!({
+            "path": path
+        }),
+    };
+
+    // Send request
+    let request_bytes = serde_json::to_vec(&vfs_request)
+        .map_err(|e| format!("Failed to serialize file read request: {}", e))?;
+
+    let response_bytes = request(&fs_hash.to_string(), &request_bytes)
+        .map_err(|e| format!("Failed to send file read request: {}", e))?;
+
+    // Parse response
+    let response: VfsResponse = serde_json::from_slice(&response_bytes)
+        .map_err(|e| format!("Failed to parse file read response: {}", e))?;
+
+    if response.status != "ok" {
+        return Err(response
+            .error
+            .unwrap_or_else(|| "Unknown error".to_string()));
+    }
+
+    // Extract content
+    let content = response
+        .data
+        .get("content")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Missing or invalid 'content' field in response".to_string())?;
+
+    Ok(content.to_string())
+}
+
+/// Function to execute the build process
+fn execute_build() -> Result<BuildOutput, String> {
+    log("Executing build command");
+
+    // Execute the nix build command
+    match filesystem::execute_nix_command(
+        ".",
+        "bash -c \"cargo build --target wasm32-unknown-unknown --release\"",
+    ) {
+        Ok(stdout) => {
+            log(&format!("Build command executed, stdout: {}", stdout));
+
+            // Capture stderr (not directly available from host function)
+            let stderr = "Stderr not available from host function".to_string();
+
+            // Check if target directory exists
+            let target_dir_path = "target/wasm32-unknown-unknown/release";
+            match filesystem::list_files(target_dir_path) {
+                Ok(files) => {
+                    log(&format!("Found {} files in target directory", files.len()));
+
+                    // Find .wasm file
+                    let wasm_files: Vec<String> = files
+                        .iter()
+                        .filter(|f| f.ends_with(".wasm"))
+                        .cloned()
+                        .collect();
+
+                    if let Some(wasm_file) = wasm_files.first() {
+                        let wasm_path = format!("{}/{}", target_dir_path, wasm_file);
+                        log(&format!("Found WASM file at {}", wasm_path));
+
+                        // Read WASM file to calculate hash
+                        match filesystem::read_file(&wasm_path) {
+                            Ok(wasm_bytes) => {
+                                // Calculate hash (basic string hash for now)
+                                let wasm_hash = format!("wasm-{}", wasm_bytes.len());
+
+                                // Create build output
+                                let build_output = BuildOutput {
+                                    success: true,
+                                    stdout,
+                                    stderr,
+                                    wasm_path: Some(wasm_path),
+                                    wasm_hash: Some(wasm_hash),
+                                    build_logs: vec!["Build completed successfully".to_string()],
+                                    error: None,
+                                };
+
+                                Ok(build_output)
+                            }
+                            Err(e) => {
+                                log(&format!("Failed to read WASM file: {}", e));
+
+                                // Create build output with error
+                                let build_output = BuildOutput {
+                                    success: false,
+                                    stdout,
+                                    stderr,
+                                    wasm_path: Some(wasm_path),
+                                    wasm_hash: None,
+                                    build_logs: vec!["Failed to read WASM file".to_string()],
+                                    error: Some(format!("Failed to read WASM file: {}", e)),
+                                };
+
+                                Ok(build_output)
+                            }
+                        }
+                    } else {
+                        log("No WASM file found");
+
+                        // Create build output with error
+                        let build_output = BuildOutput {
+                            success: false,
+                            stdout,
+                            stderr,
+                            wasm_path: None,
+                            wasm_hash: None,
+                            build_logs: vec!["No WASM file found".to_string()],
+                            error: Some("No WASM file found".to_string()),
+                        };
+
+                        Ok(build_output)
+                    }
+                }
+                Err(e) => {
+                    log(&format!("Failed to list target directory: {}", e));
+
+                    // Create build output with error
+                    let build_output = BuildOutput {
+                        success: false,
+                        stdout,
+                        stderr,
+                        wasm_path: None,
+                        wasm_hash: None,
+                        build_logs: vec!["Failed to list target directory".to_string()],
+                        error: Some(format!("Failed to list target directory: {}", e)),
+                    };
+
+                    Ok(build_output)
+                }
+            }
         }
+        Err(e) => {
+            log(&format!("Failed to execute build command: {}", e));
 
-        state.active_context.branch = branch.clone();
-    }
+            // Create build output with error
+            let build_output = BuildOutput {
+                success: false,
+                stdout: String::new(),
+                stderr: format!("Failed to execute build command: {}", e),
+                wasm_path: None,
+                wasm_hash: None,
+                build_logs: vec!["Build command failed".to_string()],
+                error: Some(format!("Failed to execute build command: {}", e)),
+            };
 
-    // Dispatch to appropriate handler based on action
-    let response = match request.action.as_str() {
-        // File operations
-        "read-file" => handle_read_file(state, &request),
-        "write-file" => handle_write_file(state, &request),
-        "list-directory" => handle_list_directory(state, &request),
-        "create-directory" => handle_create_directory(state, &request),
-        "delete" => handle_delete(state, &request),
-
-        // Version control operations
-        "commit" => handle_commit(state, &request),
-        "create-branch" => handle_create_branch(state, &request),
-        "list-branches" => handle_list_branches(state, &request),
-        "get-history" => handle_get_history(state, &request),
-        "diff" => handle_diff(state, &request),
-
-        // Project management
-        "create-project" => handle_create_project(state, &request),
-        "list-projects" => handle_list_projects(state, &request),
-        "get-project-info" => handle_get_project_info(state, &request),
-
-        // Advanced operations
-        "search" => handle_search(state, &request),
-
-        // Unknown action
-        _ => error_response(&format!("Unknown action: {}", request.action)),
-    };
-
-    Ok(response)
-}
-
-// We'll define handler functions that delegate to our handlers module
-fn handle_read_file(state: &State, request: &Request) -> String {
-    // Convert the request parameters to path
-    let path = match request.params.get("path").and_then(|p| p.as_str()) {
-        Some(p) => p.to_string(),
-        None => return utils::error_response("Missing 'path' parameter"),
-    };
-
-    // Get the project and branch names
-    let project = &state.active_context.project;
-    let branch = &state.active_context.branch;
-
-    // Call the actual read_file function
-    match state.read_file(project, branch, &path) {
-        Ok(data) => utils::success_response(serde_json::to_value(data).unwrap_or_default()),
-        Err(e) => utils::error_response(&e.to_string()),
+            Ok(build_output)
+        }
     }
 }
 
-fn handle_write_file(state: &mut State, request: &Request) -> String {
-    match state.handle_write_file(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
+/// Function to send build results to the callback address
+fn send_build_results(callback_address: &str, build_output: &BuildOutput) {
+    log(&format!("Sending build results to {}", callback_address));
 
-fn handle_list_directory(state: &State, request: &Request) -> String {
-    match state.handle_list_directory(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
+    // Create message
+    let message = json!({
+        "action": "build_result",
+        "success": build_output.success,
+        "wasm_hash": build_output.wasm_hash,
+        "logs": build_output.build_logs,
+        "error": build_output.error,
+        "stdout": build_output.stdout,
+        "stderr": build_output.stderr
+    });
 
-fn handle_create_directory(state: &mut State, request: &Request) -> String {
-    match state.handle_create_directory(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
+    // Send message
+    match serde_json::to_vec(&message) {
+        Ok(message_bytes) => match send(&callback_address.to_string(), &message_bytes) {
+            Ok(_) => log("Successfully sent build results"),
+            Err(e) => log(&format!("Failed to send build results: {}", e)),
+        },
+        Err(e) => log(&format!("Failed to serialize build results: {}", e)),
     }
-}
-
-fn handle_delete(state: &mut State, request: &Request) -> String {
-    match state.handle_delete(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_commit(state: &mut State, request: &Request) -> String {
-    match state.handle_commit(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_create_branch(state: &mut State, request: &Request) -> String {
-    match state.handle_create_branch(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_list_branches(state: &State, _request: &Request) -> String {
-    match state.handle_list_branches() {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_get_history(state: &State, request: &Request) -> String {
-    match state.handle_get_history(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_diff(state: &State, request: &Request) -> String {
-    match state.handle_diff(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_create_project(state: &mut State, request: &Request) -> String {
-    match state.handle_create_project(&request.params) {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_list_projects(state: &State, _request: &Request) -> String {
-    match state.handle_list_projects() {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_get_project_info(state: &State, _request: &Request) -> String {
-    match state.handle_get_project_info() {
-        Ok(data) => utils::success_response(data),
-        Err(e) => utils::error_response(&e.to_string()),
-    }
-}
-
-fn handle_search(_state: &State, _request: &Request) -> String {
-    // Placeholder for now - this can be implemented later
-    utils::success_response(serde_json::json!({
-        "matches": [],
-        "total": 0,
-        "query": "search-query",
-    }))
 }
 
 // Export the component

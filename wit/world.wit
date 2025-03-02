@@ -3,7 +3,7 @@ package ntwk:theater;
 world runtime-content-fs {
     import runtime;
     import message-server-host;
-    import store;  
+    import filesystem;
     export message-server-client;
     export actor;
 }
