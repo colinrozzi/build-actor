@@ -1,0 +1,9 @@
+package ntwk:theater;
+
+world runtime-content-fs {
+    import runtime;
+    import message-server-host;
+    import store;  
+    export message-server-client;
+    export actor;
+}

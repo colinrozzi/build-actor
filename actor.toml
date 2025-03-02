@@ -1,0 +1,17 @@
+name = "runtime-content-fs"
+version = "0.1.0"
+description = "Content-addressable virtual filesystem with versioning capabilities"
+component_path = "/Users/colinrozzi/work/actors/runtime-content-fs/target/wasm32-unknown-unknown/release/runtime_content_fs.wasm"
+init_data = "/Users/colinrozzi/work/actors/runtime-content-fs/assets/init.json"
+
+[interface]
+implements = "ntwk:theater/content-fs"
+requires = []
+
+[[handlers]]
+type = "runtime"
+config = {}
+
+[[handlers]]
+type = "store"
+config = {}

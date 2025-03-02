@@ -1,0 +1,5 @@
+{
+  "create_new": false,
+  "root_project": "existing-project",
+  "default_branch": "main"
+}

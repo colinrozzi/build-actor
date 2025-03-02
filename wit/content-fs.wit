@@ -1,0 +1,111 @@
+package ntwk:theater;
+
+/// Content FS interface for accessing the content-addressable filesystem
+interface content-fs {
+
+    /// File content returned from reading a file
+    record file-content {
+        /// File content as string
+        content: string,
+        /// Content hash
+        hash: string,
+        /// File metadata
+        metadata: file-metadata,
+    }
+
+    /// File metadata
+    record file-metadata {
+        /// File path
+        path: string,
+        /// File size in bytes
+        size: u32,
+    }
+
+    /// Write file result
+    record write-result {
+        /// Content hash
+        hash: string,
+        /// File path
+        path: string,
+        /// Commit hash if auto-committed
+        commit-hash: option<string>,
+    }
+
+    /// Directory entry
+    record directory-entry {
+        /// Name of file or directory
+        name: string,
+        /// Type of node (file or directory)
+        node-type: string,
+        /// Content hash
+        hash: string,
+        /// Size in bytes
+        size: u32,
+    }
+
+    /// Directory listing result
+    record directory-listing {
+        /// List of directory entries
+        entries: list<directory-entry>,
+        /// Directory path
+        path: string,
+    }
+
+    /// Create directory result
+    record create-result {
+        /// Directory hash
+        hash: string,
+        /// Directory path
+        path: string,
+    }
+
+    /// Delete result
+    record delete-result {
+        /// Deleted path
+        path: string,
+        /// Whether deletion was successful
+        deleted: bool,
+    }
+
+    /// Read a file from the filesystem
+    read-file: func(
+        project: string,
+        branch: string,
+        path: string
+    ) -> result<file-content, string>;
+
+    /// Write a file to the filesystem
+    write-file: func(
+        project: string,
+        branch: string,
+        path: string,
+        content: list<u8>,
+        commit: bool,
+        commit-message: string
+    ) -> result<write-result, string>;
+
+    /// List a directory in the filesystem
+    list-directory: func(
+        project: string,
+        branch: string,
+        path: string,
+        recursive: bool
+    ) -> result<directory-listing, string>;
+
+    /// Create a directory in the filesystem
+    create-directory: func(
+        project: string,
+        branch: string,
+        path: string
+    ) -> result<create-result, string>;
+
+    /// Delete a file or directory in the filesystem
+    delete: func(
+        project: string,
+        branch: string,
+        path: string,
+        recursive: bool
+    ) -> result<delete-result, string>;
+
+    // Additional operations like commit, create-branch, etc. will be added here
+}
