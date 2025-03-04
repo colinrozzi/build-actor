@@ -82,6 +82,7 @@ impl Guest for Component {
     /// Initialize the build actor
     fn init(init_data: Option<Json>, _params: (String,)) -> Result<(Option<Json>,), String> {
         log("build-actor: Initializing");
+        log(&format!("Initialization data: {:?}", init_data));
 
         // Parse initialization data
         if let Some(data) = init_data {

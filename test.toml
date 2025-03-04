@@ -2,6 +2,7 @@ name = "build-actor"
 version = "0.1.0"
 description = "Actor that builds other actors from virtual filesystem references"
 component_path = "/Users/colinrozzi/work/actors/build-actor/target/wasm32-unknown-unknown/release/build_actor.wasm"
+init_state = "/Users/colinrozzi/work/actors/build-actor/test_state.json"
 
 [interface]
 implements = "ntwk:theater/build-actor"
