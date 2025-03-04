@@ -4,6 +4,7 @@ world runtime-content-fs {
     import runtime;
     import message-server-host;
     import filesystem;
+    import store;
     export message-server-client;
     export actor;
 }

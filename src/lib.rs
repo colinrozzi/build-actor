@@ -3,9 +3,9 @@ mod bindings;
 use bindings::exports::ntwk::theater::actor::Guest;
 use bindings::exports::ntwk::theater::message_server_client::Guest as MessageServerClient;
 use bindings::ntwk::theater::filesystem;
-use bindings::ntwk::theater::message_server_host::request;
 use bindings::ntwk::theater::message_server_host::send;
 use bindings::ntwk::theater::runtime::log;
+use bindings::ntwk::theater::store::{self, ContentRef};
 use bindings::ntwk::theater::types::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -17,7 +17,7 @@ struct State {
     // The address to which build results should be sent
     callback_address: String,
 
-    // Virtual filesystem reference (content-fs actor ID)
+    // Content reference to filesystem root in the Theater runtime store
     fs_hash: String,
 
     // Build status
@@ -49,21 +49,22 @@ struct BuildOutput {
     error: Option<String>,
 }
 
-/// Structure to hold virtual file system operation requests
-#[derive(Debug, Serialize, Deserialize)]
-struct VfsRequest {
-    action: String,
-    project: Option<String>,
-    branch: Option<String>,
-    params: Value,
+/// Types of filesystem nodes
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+enum NodeType {
+    File,
+    Directory,
 }
 
-/// Structure to hold virtual file system operation responses
-#[derive(Debug, Serialize, Deserialize)]
-struct VfsResponse {
-    status: String,
-    data: Value,
-    error: Option<String>,
+/// Represents a filesystem node (file or directory)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct FSNode {
+    /// For directories: mapping of child names to hash
+    entries: Option<HashMap<String, String>>,
+    /// For files: content data
+    content: Option<Vec<u8>>,
+    /// Type of node
+    node_type: NodeType,
 }
 
 /// Structure representing a directory entry
