@@ -1,46 +1,28 @@
 # Build Actor
 
-An actor that builds other actors from virtual filesystem references.
+An actor that builds other actors from source code stored in the Theater runtime's content store.
 
 ## Overview
 
-The Build Actor takes a virtual filesystem hash that references an actor project, writes that filesystem to a new temporary directory, builds the actor using nix flakes, and returns the build results to a specified callback address.
+The build-actor is responsible for taking a reference to content in the Theater runtime's store (`fs_hash`), extracting the source code from it, and then building it into a WebAssembly component.
 
-## Usage
+## Parameters
 
-Initialize the actor with:
+- `fs_hash`: A reference (hash) to the root filesystem node in the Theater runtime's content store
+- `callback_address`: The address to send build results to when the build is complete
 
-```json
-{
-  "fs_hash": "content-fs-actor-id",
-  "callback_address": "actor-address-to-receive-results"
-}
-```
+## Operation
 
-The callback address will receive a message with the following format:
+1. The actor retrieves the source code from the content store using the provided `fs_hash`
+2. It extracts the files into a local filesystem structure
+3. It runs the build command (`cargo build --target wasm32-unknown-unknown --release`)
+4. It captures the build output and sends it to the callback address
 
-```json
-{
-  "action": "build_result",
-  "success": true|false,
-  "wasm_hash": "hash-of-compiled-wasm-if-successful",
-  "logs": ["log entry 1", "log entry 2", ...],
-  "error": "error message if failed",
-  "stdout": "standard output from build",
-  "stderr": "standard error from build"
-}
-```
+## Status
 
-## Features
-
-- Takes a virtual filesystem reference and builds the actor in a temporary directory
-- Uses nix flakes to ensure consistent build environment
-- Returns build results to a specified callback address 
-- Handles build failures gracefully
-- Returns WASM file hash for successful builds
-
-## Requirements
-
-- Nix must be installed on the host system
-- Host must have Internet access for nix to download dependencies
-- Virtual filesystem must contain a valid actor project with Cargo.toml
+The build process goes through several states:
+- `NotStarted`: Initial state
+- `Extracting`: Files are being extracted from the content store
+- `Building`: Build command is executing
+- `Completed`: Build finished successfully
+- `Failed`: Build encountered an error

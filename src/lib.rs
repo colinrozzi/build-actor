@@ -349,7 +349,7 @@ fn process_directory(fs_hash: &str, path: &str, entries: &[DirectoryEntry]) -> R
 
         if entry.entry_type == "directory" {
             // Create directory
-            if let Err(e) = filesystem::create_dir(&entry_path) {
+            if let Err(e) = filesystem::create_dir(&format!(".{}", entry_path)) {
                 log(&format!("Failed to create directory {}: {}", entry_path, e));
                 return Err(format!("Failed to create directory {}: {}", entry_path, e));
             }
@@ -372,7 +372,7 @@ fn process_directory(fs_hash: &str, path: &str, entries: &[DirectoryEntry]) -> R
             match read_file(fs_hash, &entry_path) {
                 Ok(content) => {
                     // Write file to local filesystem
-                    if let Err(e) = filesystem::write_file(&entry_path, &content) {
+                    if let Err(e) = filesystem::write_file(&format!(".{}", entry_path), &content) {
                         log(&format!("Failed to write file {}: {}", entry_path, e));
                         return Err(format!("Failed to write file {}: {}", entry_path, e));
                     }
@@ -391,66 +391,64 @@ fn process_directory(fs_hash: &str, path: &str, entries: &[DirectoryEntry]) -> R
 /// Function to list directory contents from the runtime store
 fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, String> {
     log(&format!("Listing directory: {}", path));
-    
+
     // Get the filesystem node from the store
     let content_ref = ContentRef {
         hash: fs_hash.to_string(),
     };
-    
+
     // Get the content
     let fs_bytes = match store::get(&content_ref) {
         Ok(bytes) => bytes,
         Err(e) => return Err(format!("Failed to retrieve filesystem root: {}", e)),
     };
-    
+
     // Parse the filesystem node
     let root_node: FSNode = match serde_json::from_slice(&fs_bytes) {
         Ok(node) => node,
         Err(e) => return Err(format!("Failed to parse filesystem node: {}", e)),
     };
-    
+
     // Handle root directory case
     if path == "/" {
         if root_node.node_type != NodeType::Directory || root_node.entries.is_none() {
             return Err("Root is not a valid directory".to_string());
         }
-        
+
         let entries = root_node.entries.unwrap();
         let mut result = Vec::new();
-        
+
         for (name, hash) in entries {
             // Get the child node to determine its type
             let child_node = get_node(&hash)?;
-            
+
             let entry_type = match child_node.node_type {
                 NodeType::File => "file",
                 NodeType::Directory => "directory",
             };
-            
+
             result.push(DirectoryEntry {
                 name: name.clone(),
                 entry_type: entry_type.to_string(),
                 path: format!("/{}", name),
             });
         }
-        
+
         return Ok(result);
     }
-    
+
     // For non-root paths, navigate to the specified directory
-    let path_components: Vec<&str> = path.split('/')
-        .filter(|s| !s.is_empty())
-        .collect();
-    
+    let path_components: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+
     let mut current_node = root_node;
     let mut current_hash = fs_hash.to_string();
-    
+
     // Navigate through path components
     for component in path_components {
         if current_node.node_type != NodeType::Directory || current_node.entries.is_none() {
             return Err(format!("Path component is not a directory: {}", component));
         }
-        
+
         let entries = current_node.entries.unwrap();
         if let Some(hash) = entries.get(component) {
             current_hash = hash.clone();
@@ -459,32 +457,32 @@ fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, Stri
             return Err(format!("Path component not found: {}", component));
         }
     }
-    
+
     // Ensure the final node is a directory
     if current_node.node_type != NodeType::Directory || current_node.entries.is_none() {
         return Err(format!("Path is not a directory: {}", path));
     }
-    
+
     // List entries
     let entries = current_node.entries.unwrap();
     let mut result = Vec::new();
-    
+
     for (name, hash) in entries {
         // Get the child node to determine its type
         let child_node = get_node(&hash)?;
-        
+
         let entry_type = match child_node.node_type {
             NodeType::File => "file",
             NodeType::Directory => "directory",
         };
-        
+
         result.push(DirectoryEntry {
             name: name.clone(),
             entry_type: entry_type.to_string(),
             path: format!("{}/{}", path, name),
         });
     }
-    
+
     Ok(result)
 }
 
@@ -493,12 +491,12 @@ fn get_node(hash: &str) -> Result<FSNode, String> {
     let content_ref = ContentRef {
         hash: hash.to_string(),
     };
-    
+
     let bytes = match store::get(&content_ref) {
         Ok(bytes) => bytes,
         Err(e) => return Err(format!("Failed to retrieve node content: {}", e)),
     };
-    
+
     match serde_json::from_slice::<FSNode>(&bytes) {
         Ok(node) => Ok(node),
         Err(e) => Err(format!("Failed to parse node: {}", e)),
@@ -508,10 +506,10 @@ fn get_node(hash: &str) -> Result<FSNode, String> {
 /// Function to read a file from the runtime store
 fn read_file(fs_hash: &str, path: &str) -> Result<String, String> {
     log(&format!("Reading file: {}", path));
-    
+
     // First find the file node
     let file_content = read_file_content(fs_hash, path)?;
-    
+
     // Convert bytes to string
     match String::from_utf8(file_content) {
         Ok(content) => Ok(content),
@@ -525,44 +523,42 @@ fn read_file_content(fs_hash: &str, path: &str) -> Result<Vec<u8>, String> {
     if path == "/" {
         return Err("Cannot read root directory as a file".to_string());
     }
-    
+
     // Get the filesystem node from the store
     let content_ref = ContentRef {
         hash: fs_hash.to_string(),
     };
-    
+
     // Get the content
     let fs_bytes = match store::get(&content_ref) {
         Ok(bytes) => bytes,
         Err(e) => return Err(format!("Failed to retrieve filesystem root: {}", e)),
     };
-    
+
     // Parse the filesystem node
     let root_node: FSNode = match serde_json::from_slice(&fs_bytes) {
         Ok(node) => node,
         Err(e) => return Err(format!("Failed to parse filesystem node: {}", e)),
     };
-    
+
     // Split path into components
-    let path_components: Vec<&str> = path.split('/')
-        .filter(|s| !s.is_empty())
-        .collect();
-    
+    let path_components: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+
     if path_components.is_empty() {
         return Err("Invalid file path".to_string());
     }
-    
+
     let file_name = path_components[path_components.len() - 1];
     let dir_components = &path_components[0..path_components.len() - 1];
-    
+
     // Navigate to parent directory
     let mut current_node = root_node;
-    
+
     for component in dir_components {
         if current_node.node_type != NodeType::Directory || current_node.entries.is_none() {
             return Err(format!("Path component is not a directory: {}", component));
         }
-        
+
         let entries = current_node.entries.unwrap();
         if let Some(hash) = entries.get(*component) {
             current_node = get_node(hash)?;
@@ -570,22 +566,22 @@ fn read_file_content(fs_hash: &str, path: &str) -> Result<Vec<u8>, String> {
             return Err(format!("Path component not found: {}", component));
         }
     }
-    
+
     // Find the file in the directory
     if current_node.node_type != NodeType::Directory || current_node.entries.is_none() {
         return Err("Parent path is not a directory".to_string());
     }
-    
+
     let entries = current_node.entries.unwrap();
     if let Some(file_hash) = entries.get(file_name) {
         // Get the file node
         let file_node = get_node(file_hash)?;
-        
+
         // Ensure it's a file
         if file_node.node_type != NodeType::File || file_node.content.is_none() {
             return Err(format!("Path does not point to a file: {}", path));
         }
-        
+
         Ok(file_node.content.unwrap())
     } else {
         Err(format!("File not found: {}", file_name))
@@ -597,9 +593,16 @@ fn execute_build() -> Result<BuildOutput, String> {
     log("Executing build command");
 
     // Execute the nix build command
-    match filesystem::execute_nix_command(
+    match filesystem::execute_command(
         ".",
-        "bash -c \"cargo build --target wasm32-unknown-unknown --release\"",
+        "nix",
+        &[
+            "develop".to_string(),
+            "--command".to_string(),
+            "bash".to_string(),
+            "-c".to_string(),
+            "cargo component build --target wasm32-unknown-unknown --release".to_string(),
+        ],
     ) {
         Ok(stdout) => {
             log(&format!("Build command executed, stdout: {}", stdout));

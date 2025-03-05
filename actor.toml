@@ -12,5 +12,9 @@ type = "runtime"
 config = {}
 
 [[handlers]]
+type = "store"
+config = {}
+
+[[handlers]]
 type = "filesystem"
 config = { new_dir = true, allowed_commands = ["nix"] }
