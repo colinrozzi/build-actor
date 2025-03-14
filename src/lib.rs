@@ -11,11 +11,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct State {}
+
 /// State structure for the build actor
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct State {
-    // The address to which build results should be sent
-    callback_address: String,
+struct BuildState {
+    store_id: String,
 
     // Content reference to filesystem root in the Theater runtime store
     fs_hash: String,
@@ -84,59 +86,7 @@ impl Guest for Component {
     fn init(init_data: Option<Json>, _params: (String,)) -> Result<(Option<Json>,), String> {
         log("build-actor: Initializing");
         log(&format!("Initialization data: {:?}", init_data));
-
-        // Parse initialization data
-        if let Some(data) = init_data {
-            match serde_json::from_slice::<Value>(&data) {
-                Ok(config) => {
-                    // Extract required parameters
-                    let fs_hash = match config.get("fs_hash").and_then(|v| v.as_str()) {
-                        Some(hash) => hash.to_string(),
-                        None => return Err("Missing required parameter 'fs_hash'".to_string()),
-                    };
-
-                    let callback_address = match config
-                        .get("callback_address")
-                        .and_then(|v| v.as_str())
-                    {
-                        Some(addr) => addr.to_string(),
-                        None => {
-                            return Err("Missing required parameter 'callback_address'".to_string())
-                        }
-                    };
-
-                    // Create initial state
-                    let mut state = State {
-                        callback_address,
-                        fs_hash,
-                        status: BuildStatus::NotStarted,
-                        build_output: None,
-                    };
-
-                    // Serialize and return state
-                    match serde_json::to_vec(&state) {
-                        Ok(state_bytes) => {
-                            log("build-actor: Initialized successfully");
-
-                            // Start the build process
-                            match start_build(&mut state) {
-                                Ok(_) => log("build-actor: Build process started"),
-                                Err(e) => log(&format!(
-                                    "build-actor: Failed to start build process: {}",
-                                    e
-                                )),
-                            }
-
-                            Ok((Some(state_bytes),))
-                        }
-                        Err(e) => Err(format!("Failed to serialize state: {}", e)),
-                    }
-                }
-                Err(e) => Err(format!("Failed to parse initialization data: {}", e)),
-            }
-        } else {
-            Err("No initialization data provided".to_string())
-        }
+        Ok((init_data,))
     }
 }
 
@@ -153,75 +103,48 @@ impl MessageServerClient for Component {
         params: (Json,),
     ) -> Result<(Option<Json>, (Json,)), String> {
         log("build-actor: Received request");
+        let req = params.0;
+        match serde_json::from_slice::<Value>(&req) {
+            Ok(config) => {
+                // Extract required parameters
+                let fs_hash = match config.get("fs_hash").and_then(|v| v.as_str()) {
+                    Some(hash) => hash.to_string(),
+                    None => return Err("Missing required parameter 'fs_hash'".to_string()),
+                };
 
-        // Deserialize state
-        let state: State = match state_bytes {
-            Some(bytes) => match serde_json::from_slice(&bytes) {
-                Ok(s) => s,
-                Err(e) => {
-                    log(&format!("Failed to deserialize state: {}", e));
-                    return Err(format!("Failed to deserialize state: {}", e));
-                }
-            },
-            None => {
-                return Err("No state available".to_string());
-            }
-        };
+                let store_id = match config.get("store_id").and_then(|v| v.as_str()) {
+                    Some(id) => id.to_string(),
+                    None => return Err("Missing required parameter 'store_id'".to_string()),
+                };
 
-        // Process the request
-        let request_bytes = params.0;
-        let request_str = match std::str::from_utf8(&request_bytes) {
-            Ok(s) => s,
-            Err(e) => {
-                log(&format!("Invalid UTF-8 in request: {}", e));
-                return Err(format!("Invalid UTF-8 in request: {}", e));
-            }
-        };
+                // Create initial state
+                let mut state = BuildState {
+                    store_id,
+                    fs_hash,
+                    status: BuildStatus::NotStarted,
+                    build_output: None,
+                };
 
-        log(&format!("Request content: {}", request_str));
+                // Serialize and return state
+                match serde_json::to_vec(&state) {
+                    Ok(state_bytes) => {
+                        log("build-actor: Initialized successfully");
 
-        // Parse the request
-        let request: Value = match serde_json::from_str(request_str) {
-            Ok(req) => req,
-            Err(e) => {
-                log(&format!("Invalid request JSON: {}", e));
-                return Err(format!("Invalid request JSON: {}", e));
-            }
-        };
+                        // Start the build process
+                        let res = start_build(&mut state);
 
-        // Handle various request types
-        let action = request["action"].as_str().unwrap_or("status");
-
-        let response = match action {
-            "status" => {
-                // Return current build status
-                json!({
-                    "status": "ok",
-                    "data": {
-                        "build_status": format!("{:?}", state.status),
-                        "output": state.build_output
+                        Ok((Some(state_bytes), (serde_json::to_vec(&res).unwrap(),)))
                     }
-                })
+                    Err(e) => Err(format!("Failed to serialize state: {}", e)),
+                }
             }
-            _ => {
-                // Unknown action
-                json!({
-                    "status": "error",
-                    "error": format!("Unknown action: {}", action)
-                })
-            }
-        };
-
-        // Return state unchanged and response
-        Ok((
-            Some(serde_json::to_vec(&state).unwrap()),
-            (serde_json::to_vec(&response).unwrap(),),
-        ))
+            Err(e) => Err(format!("Failed to parse initialization data: {}", e)),
+        }
     }
 }
 
 /// Function to start the build process
-fn start_build(state: &mut State) -> Result<(), String> {
+fn start_build(state: &mut BuildState) -> BuildOutput {
     log("Starting build process");
 
     // First update state to reflect that we're starting
@@ -234,12 +157,12 @@ fn start_build(state: &mut State) -> Result<(), String> {
             let fs_hash = &state.fs_hash;
 
             // Directory listing from root
-            match list_directory(fs_hash, "/") {
+            match list_directory(fs_hash, "/", &state.store_id) {
                 Ok(entries) => {
                     log(&format!("Found {} entries at root", entries.len()));
 
                     // Process entries recursively
-                    match process_directory(fs_hash, "/", &entries) {
+                    match process_directory(fs_hash, "/", &entries, &state.store_id) {
                         Ok(_) => {
                             log("Successfully extracted all files from virtual filesystem");
 
@@ -273,10 +196,7 @@ fn start_build(state: &mut State) -> Result<(), String> {
                                         log(&format!("Failed to serialize final state: {}", e));
                                     }
 
-                                    // Send build results to callback address
-                                    send_build_results(&state.callback_address, &build_output);
-
-                                    Ok(())
+                                    build_output
                                 }
                                 Err(e) => {
                                     log(&format!("Build failed: {}", e));
@@ -299,45 +219,68 @@ fn start_build(state: &mut State) -> Result<(), String> {
                                         log(&format!("Failed to serialize failed state: {}", e));
                                     }
 
-                                    // Send failure result
-                                    send_build_results(
-                                        &state.callback_address,
-                                        &BuildOutput {
-                                            success: false,
-                                            stdout: String::new(),
-                                            stderr: String::new(),
-                                            wasm_path: None,
-                                            wasm_hash: None,
-                                            build_logs: vec![],
-                                            error: Some(e),
-                                        },
-                                    );
-
-                                    Err("Build failed".to_string())
+                                    BuildOutput {
+                                        success: false,
+                                        stdout: String::new(),
+                                        stderr: String::new(),
+                                        wasm_path: None,
+                                        wasm_hash: None,
+                                        build_logs: vec![],
+                                        error: Some(e),
+                                    }
                                 }
                             }
                         }
                         Err(e) => {
                             log(&format!("Failed to process directories: {}", e));
-                            Err(format!("Failed to process directories: {}", e))
+                            BuildOutput {
+                                success: false,
+                                stdout: String::new(),
+                                stderr: String::new(),
+                                wasm_path: None,
+                                wasm_hash: None,
+                                build_logs: vec![],
+                                error: Some(e),
+                            }
                         }
                     }
                 }
                 Err(e) => {
                     log(&format!("Failed to list root directory: {}", e));
-                    Err(format!("Failed to list root directory: {}", e))
+                    BuildOutput {
+                        success: false,
+                        stdout: String::new(),
+                        stderr: String::new(),
+                        wasm_path: None,
+                        wasm_hash: None,
+                        build_logs: vec![],
+                        error: Some(e),
+                    }
                 }
             }
         }
         Err(e) => {
             log(&format!("Failed to serialize updated state: {}", e));
-            Err(format!("Failed to serialize updated state: {}", e))
+            BuildOutput {
+                success: false,
+                stdout: String::new(),
+                stderr: String::new(),
+                wasm_path: None,
+                wasm_hash: None,
+                build_logs: vec![],
+                error: Some(e.to_string()),
+            }
         }
     }
 }
 
 /// Function to process all entries in a directory recursively
-fn process_directory(fs_hash: &str, path: &str, entries: &[DirectoryEntry]) -> Result<(), String> {
+fn process_directory(
+    fs_hash: &str,
+    path: &str,
+    entries: &[DirectoryEntry],
+    store_id: &str,
+) -> Result<(), String> {
     for entry in entries {
         let entry_path = if path == "/" {
             format!("/{}", entry.name)
@@ -355,10 +298,11 @@ fn process_directory(fs_hash: &str, path: &str, entries: &[DirectoryEntry]) -> R
             }
 
             // List directory contents
-            match list_directory(fs_hash, &entry_path) {
+            match list_directory(fs_hash, &entry_path, store_id) {
                 Ok(sub_entries) => {
                     // Process subdirectory
-                    if let Err(e) = process_directory(fs_hash, &entry_path, &sub_entries) {
+                    if let Err(e) = process_directory(fs_hash, &entry_path, &sub_entries, store_id)
+                    {
                         return Err(e);
                     }
                 }
@@ -369,7 +313,7 @@ fn process_directory(fs_hash: &str, path: &str, entries: &[DirectoryEntry]) -> R
             }
         } else {
             // Read file content
-            match read_file(fs_hash, &entry_path) {
+            match read_file(fs_hash, &entry_path, store_id) {
                 Ok(content) => {
                     // Write file to local filesystem
                     if let Err(e) = filesystem::write_file(&format!(".{}", entry_path), &content) {
@@ -389,7 +333,11 @@ fn process_directory(fs_hash: &str, path: &str, entries: &[DirectoryEntry]) -> R
 }
 
 /// Function to list directory contents from the runtime store
-fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, String> {
+fn list_directory(
+    fs_hash: &str,
+    path: &str,
+    store_id: &str,
+) -> Result<Vec<DirectoryEntry>, String> {
     log(&format!("Listing directory: {}", path));
 
     // Get the filesystem node from the store
@@ -398,7 +346,7 @@ fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, Stri
     };
 
     // Get the content
-    let fs_bytes = match store::get(&content_ref) {
+    let fs_bytes = match store::get(store_id, &content_ref) {
         Ok(bytes) => bytes,
         Err(e) => return Err(format!("Failed to retrieve filesystem root: {}", e)),
     };
@@ -420,7 +368,7 @@ fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, Stri
 
         for (name, hash) in entries {
             // Get the child node to determine its type
-            let child_node = get_node(&hash)?;
+            let child_node = get_node(store_id, &hash)?;
 
             let entry_type = match child_node.node_type {
                 NodeType::File => "file",
@@ -452,7 +400,7 @@ fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, Stri
         let entries = current_node.entries.unwrap();
         if let Some(hash) = entries.get(component) {
             current_hash = hash.clone();
-            current_node = get_node(hash)?;
+            current_node = get_node(store_id, hash)?;
         } else {
             return Err(format!("Path component not found: {}", component));
         }
@@ -469,7 +417,7 @@ fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, Stri
 
     for (name, hash) in entries {
         // Get the child node to determine its type
-        let child_node = get_node(&hash)?;
+        let child_node = get_node(store_id, &hash)?;
 
         let entry_type = match child_node.node_type {
             NodeType::File => "file",
@@ -487,12 +435,12 @@ fn list_directory(fs_hash: &str, path: &str) -> Result<Vec<DirectoryEntry>, Stri
 }
 
 /// Get a node from the content store by its hash
-fn get_node(hash: &str) -> Result<FSNode, String> {
+fn get_node(hash: &str, store_id: &str) -> Result<FSNode, String> {
     let content_ref = ContentRef {
         hash: hash.to_string(),
     };
 
-    let bytes = match store::get(&content_ref) {
+    let bytes = match store::get(store_id, &content_ref) {
         Ok(bytes) => bytes,
         Err(e) => return Err(format!("Failed to retrieve node content: {}", e)),
     };
@@ -504,11 +452,11 @@ fn get_node(hash: &str) -> Result<FSNode, String> {
 }
 
 /// Function to read a file from the runtime store
-fn read_file(fs_hash: &str, path: &str) -> Result<String, String> {
+fn read_file(fs_hash: &str, path: &str, store_id: &str) -> Result<String, String> {
     log(&format!("Reading file: {}", path));
 
     // First find the file node
-    let file_content = read_file_content(fs_hash, path)?;
+    let file_content = read_file_content(fs_hash, path, store_id)?;
 
     // Convert bytes to string
     match String::from_utf8(file_content) {
@@ -518,7 +466,7 @@ fn read_file(fs_hash: &str, path: &str) -> Result<String, String> {
 }
 
 /// Get the raw content of a file
-fn read_file_content(fs_hash: &str, path: &str) -> Result<Vec<u8>, String> {
+fn read_file_content(fs_hash: &str, path: &str, store_id: &str) -> Result<Vec<u8>, String> {
     // Handle root path (invalid for a file)
     if path == "/" {
         return Err("Cannot read root directory as a file".to_string());
@@ -530,7 +478,7 @@ fn read_file_content(fs_hash: &str, path: &str) -> Result<Vec<u8>, String> {
     };
 
     // Get the content
-    let fs_bytes = match store::get(&content_ref) {
+    let fs_bytes = match store::get(store_id, &content_ref) {
         Ok(bytes) => bytes,
         Err(e) => return Err(format!("Failed to retrieve filesystem root: {}", e)),
     };
@@ -561,7 +509,7 @@ fn read_file_content(fs_hash: &str, path: &str) -> Result<Vec<u8>, String> {
 
         let entries = current_node.entries.unwrap();
         if let Some(hash) = entries.get(*component) {
-            current_node = get_node(hash)?;
+            current_node = get_node(hash, store_id)?;
         } else {
             return Err(format!("Path component not found: {}", component));
         }
@@ -575,7 +523,7 @@ fn read_file_content(fs_hash: &str, path: &str) -> Result<Vec<u8>, String> {
     let entries = current_node.entries.unwrap();
     if let Some(file_hash) = entries.get(file_name) {
         // Get the file node
-        let file_node = get_node(file_hash)?;
+        let file_node = get_node(file_hash, store_id)?;
 
         // Ensure it's a file
         if file_node.node_type != NodeType::File || file_node.content.is_none() {
