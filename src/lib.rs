@@ -14,10 +14,18 @@ use std::collections::HashMap;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct State {}
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct BuildRequest {
+    fs_hash: String,
+    store_id: String,
+    build_store_id: String,
+}
+
 /// State structure for the build actor
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct BuildState {
     store_id: String,
+    build_store_id: String,
 
     // Content reference to filesystem root in the Theater runtime store
     fs_hash: String,
@@ -104,23 +112,15 @@ impl MessageServerClient for Component {
     ) -> Result<(Option<Json>, (Json,)), String> {
         log("build-actor: Received request");
         let req = params.0;
-        match serde_json::from_slice::<Value>(&req) {
-            Ok(config) => {
-                // Extract required parameters
-                let fs_hash = match config.get("fs_hash").and_then(|v| v.as_str()) {
-                    Some(hash) => hash.to_string(),
-                    None => return Err("Missing required parameter 'fs_hash'".to_string()),
-                };
-
-                let store_id = match config.get("store_id").and_then(|v| v.as_str()) {
-                    Some(id) => id.to_string(),
-                    None => return Err("Missing required parameter 'store_id'".to_string()),
-                };
+        match serde_json::from_slice::<BuildRequest>(&req) {
+            Ok(req) => {
+                log(&format!("Received build request: {:?}", req));
 
                 // Create initial state
                 let mut state = BuildState {
-                    store_id,
-                    fs_hash,
+                    store_id: req.store_id,
+                    build_store_id: req.build_store_id,
+                    fs_hash: req.fs_hash,
                     status: BuildStatus::NotStarted,
                     build_output: None,
                 };
@@ -175,7 +175,7 @@ fn start_build(state: &mut BuildState) -> BuildOutput {
                             }
 
                             // Start the build process
-                            match execute_build() {
+                            match execute_build(&state.build_store_id) {
                                 Ok(build_output) => {
                                     log(&format!(
                                         "Build completed with success={}",
@@ -368,7 +368,7 @@ fn list_directory(
 
         for (name, hash) in entries {
             // Get the child node to determine its type
-            let child_node = get_node(store_id, &hash)?;
+            let child_node = get_node(&hash, store_id)?;
 
             let entry_type = match child_node.node_type {
                 NodeType::File => "file",
@@ -400,7 +400,7 @@ fn list_directory(
         let entries = current_node.entries.unwrap();
         if let Some(hash) = entries.get(component) {
             current_hash = hash.clone();
-            current_node = get_node(store_id, hash)?;
+            current_node = get_node(hash, store_id)?;
         } else {
             return Err(format!("Path component not found: {}", component));
         }
@@ -417,7 +417,7 @@ fn list_directory(
 
     for (name, hash) in entries {
         // Get the child node to determine its type
-        let child_node = get_node(store_id, &hash)?;
+        let child_node = get_node(&hash, store_id)?;
 
         let entry_type = match child_node.node_type {
             NodeType::File => "file",
@@ -478,6 +478,9 @@ fn read_file_content(fs_hash: &str, path: &str, store_id: &str) -> Result<Vec<u8
     };
 
     // Get the content
+    log(&format!("Reading file content: {}", path));
+    log(&format!("Store ID: {}", store_id));
+    log(&format!("Content ref: {:?}", content_ref));
     let fs_bytes = match store::get(store_id, &content_ref) {
         Ok(bytes) => bytes,
         Err(e) => return Err(format!("Failed to retrieve filesystem root: {}", e)),
@@ -537,7 +540,7 @@ fn read_file_content(fs_hash: &str, path: &str, store_id: &str) -> Result<Vec<u8
 }
 
 /// Function to execute the build process
-fn execute_build() -> Result<BuildOutput, String> {
+fn execute_build(build_store_id: &str) -> Result<BuildOutput, String> {
     log("Executing build command");
 
     // Execute the nix build command
@@ -580,6 +583,13 @@ fn execute_build() -> Result<BuildOutput, String> {
                             Ok(wasm_bytes) => {
                                 // Calculate hash (basic string hash for now)
                                 let wasm_hash = format!("wasm-{}", wasm_bytes.len());
+
+                                log(&format!(
+                                    "Storing WASM file at {} in store {}",
+                                    wasm_hash, build_store_id
+                                ));
+                                store::store_at_label(build_store_id, "wasm", &wasm_bytes)
+                                    .map_err(|e| format!("Failed to store WASM file: {}", e))?;
 
                                 // Create build output
                                 let build_output = BuildOutput {
