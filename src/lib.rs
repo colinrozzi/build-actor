@@ -140,7 +140,7 @@ impl MessageServerClient for Component {
     fn handle_channel_open(
         state_bytes: Option<Json>,
         params: (Json,),
-    ) -> Result<(Option<Json>, types::ChannelAccept), String> {
+    ) -> Result<(Option<Json>, (types::ChannelAccept,)), String> {
         log("Build actor: Channel open request received");
 
         // Parse state
@@ -196,10 +196,10 @@ impl MessageServerClient for Component {
 
                 return Ok((
                     Some(updated_state),
-                    types::ChannelAccept {
+                    (types::ChannelAccept {
                         accepted: true,
                         message: Some(response_bytes),
-                    },
+                    },),
                 ));
             }
         }
@@ -208,19 +208,19 @@ impl MessageServerClient for Component {
         let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
         Ok((
             Some(updated_state),
-            types::ChannelAccept {
+            (types::ChannelAccept {
                 accepted: false,
                 message: None,
-            },
+            },),
         ))
     }
 
     /// Handle channel message
     fn handle_channel_message(
         state_bytes: Option<Json>,
-        channel_id: ChannelId,
-        msg: Json,
+        params: (ChannelId, Json),
     ) -> Result<(Option<Json>,), String> {
+        let (channel_id, msg) = params;
         log(&format!(
             "Build actor: Received message on channel {}",
             channel_id
@@ -323,8 +323,9 @@ impl MessageServerClient for Component {
     /// Handle channel close
     fn handle_channel_close(
         state_bytes: Option<Json>,
-        channel_id: ChannelId,
+        params: (ChannelId,),
     ) -> Result<(Option<Json>,), String> {
+        let channel_id = params.0;
         log(&format!("Build actor: Channel {} closed", channel_id));
 
         // Parse state

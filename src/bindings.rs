@@ -2334,23 +2334,24 @@ pub mod exports {
                                     *ptr3.add(4).cast::<u8>() = (0i32) as u8;
                                 }
                             };
+                            let (t6_0,) = t4_1;
                             let super::super::super::super::ntwk::theater::types::ChannelAccept {
-                                accepted: accepted6,
-                                message: message6,
-                            } = t4_1;
-                            *ptr3.add(16).cast::<u8>() = (match accepted6 {
+                                accepted: accepted7,
+                                message: message7,
+                            } = t6_0;
+                            *ptr3.add(16).cast::<u8>() = (match accepted7 {
                                 true => 1,
                                 false => 0,
                             }) as u8;
-                            match message6 {
+                            match message7 {
                                 Some(e) => {
                                     *ptr3.add(20).cast::<u8>() = (1i32) as u8;
-                                    let vec7 = (e).into_boxed_slice();
-                                    let ptr7 = vec7.as_ptr().cast::<u8>();
-                                    let len7 = vec7.len();
-                                    ::core::mem::forget(vec7);
-                                    *ptr3.add(28).cast::<usize>() = len7;
-                                    *ptr3.add(24).cast::<*mut u8>() = ptr7.cast_mut();
+                                    let vec8 = (e).into_boxed_slice();
+                                    let ptr8 = vec8.as_ptr().cast::<u8>();
+                                    let len8 = vec8.len();
+                                    ::core::mem::forget(vec8);
+                                    *ptr3.add(28).cast::<usize>() = len8;
+                                    *ptr3.add(24).cast::<*mut u8>() = ptr8.cast_mut();
                                 }
                                 None => {
                                     *ptr3.add(20).cast::<u8>() = (0i32) as u8;
@@ -2359,12 +2360,12 @@ pub mod exports {
                         }
                         Err(e) => {
                             *ptr3.add(0).cast::<u8>() = (1i32) as u8;
-                            let vec8 = (e.into_bytes()).into_boxed_slice();
-                            let ptr8 = vec8.as_ptr().cast::<u8>();
-                            let len8 = vec8.len();
-                            ::core::mem::forget(vec8);
-                            *ptr3.add(8).cast::<usize>() = len8;
-                            *ptr3.add(4).cast::<*mut u8>() = ptr8.cast_mut();
+                            let vec9 = (e.into_bytes()).into_boxed_slice();
+                            let ptr9 = vec9.as_ptr().cast::<u8>();
+                            let len9 = vec9.len();
+                            ::core::mem::forget(vec9);
+                            *ptr3.add(8).cast::<usize>() = len9;
+                            *ptr3.add(4).cast::<*mut u8>() = ptr9.cast_mut();
                         }
                     };
                     ptr3
@@ -2434,8 +2435,10 @@ pub mod exports {
                             }
                             _ => _rt::invalid_enum_discriminant(),
                         },
-                        _rt::string_lift(bytes1),
-                        _rt::Vec::from_raw_parts(arg5.cast(), len2, len2),
+                        (
+                            _rt::string_lift(bytes1),
+                            _rt::Vec::from_raw_parts(arg5.cast(), len2, len2),
+                        ),
                     );
                     let ptr4 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
                     match result3 {
@@ -2520,7 +2523,7 @@ pub mod exports {
                             }
                             _ => _rt::invalid_enum_discriminant(),
                         },
-                        _rt::string_lift(bytes1),
+                        (_rt::string_lift(bytes1),),
                     );
                     let ptr3 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
                     match result2 {
@@ -2594,15 +2597,14 @@ pub mod exports {
                     fn handle_channel_open(
                         state: Option<Json>,
                         params: (Json,),
-                    ) -> Result<(Option<Json>, ChannelAccept), _rt::String>;
+                    ) -> Result<(Option<Json>, (ChannelAccept,)), _rt::String>;
                     fn handle_channel_message(
                         state: Option<Json>,
-                        channel_id: ChannelId,
-                        msg: Json,
+                        params: (ChannelId, Json),
                     ) -> Result<(Option<Json>,), _rt::String>;
                     fn handle_channel_close(
                         state: Option<Json>,
-                        channel_id: ChannelId,
+                        params: (ChannelId,),
                     ) -> Result<(Option<Json>,), _rt::String>;
                 }
                 #[doc(hidden)]
@@ -2906,21 +2908,22 @@ bel\x01\x0f\x01@\x02\x08store-ids\x05labels\0\x0b\x04\0\x0cremove-label\x01\x10\
 \x04\0\x0blist-labels\x01\x14\x01p\x01\x01j\x01\x15\x01s\x01@\x01\x08store-ids\0\
 \x16\x04\0\x10list-all-content\x01\x17\x01j\x01w\x01s\x01@\x01\x08store-ids\0\x18\
 \x04\0\x14calculate-total-size\x01\x19\x03\0\x12ntwk:theater/store\x05\x08\x02\x03\
-\0\0\x05event\x02\x03\0\0\x0echannel-accept\x01B\x1a\x02\x03\x02\x01\x01\x04\0\x04\
+\0\0\x05event\x02\x03\0\0\x0echannel-accept\x01B\x1d\x02\x03\x02\x01\x01\x04\0\x04\
 json\x03\0\0\x02\x03\x02\x01\x09\x04\0\x05event\x03\0\x02\x02\x03\x02\x01\x05\x04\
 \0\x0achannel-id\x03\0\x04\x02\x03\x02\x01\x0a\x04\0\x0echannel-accept\x03\0\x06\
 \x01k\x01\x01o\x01\x01\x01o\x01\x08\x01j\x01\x0a\x01s\x01@\x02\x05state\x08\x06p\
 arams\x09\0\x0b\x04\0\x0bhandle-send\x01\x0c\x01o\x02\x08\x09\x01j\x01\x0d\x01s\x01\
-@\x02\x05state\x08\x06params\x09\0\x0e\x04\0\x0ehandle-request\x01\x0f\x01o\x02\x08\
-\x07\x01j\x01\x10\x01s\x01@\x02\x05state\x08\x06params\x09\0\x11\x04\0\x13handle\
--channel-open\x01\x12\x01@\x03\x05state\x08\x0achannel-id\x05\x03msg\x01\0\x0b\x04\
-\0\x16handle-channel-message\x01\x13\x01@\x02\x05state\x08\x0achannel-id\x05\0\x0b\
-\x04\0\x14handle-channel-close\x01\x14\x04\0\"ntwk:theater/message-server-client\
-\x05\x0b\x02\x03\0\0\x05state\x01B\x07\x02\x03\x02\x01\x0c\x04\0\x05state\x03\0\0\
-\x01o\x01s\x01o\x01\x01\x01j\x01\x03\x01s\x01@\x02\x05state\x01\x06params\x02\0\x04\
-\x04\0\x04init\x01\x05\x04\0\x12ntwk:theater/actor\x05\x0d\x04\0\x18ntwk:theater\
-/build-actor\x04\0\x0b\x11\x01\0\x0bbuild-actor\x03\0\0\0G\x09producers\x01\x0cp\
-rocessed-by\x02\x0dwit-component\x070.220.1\x10wit-bindgen-rust\x060.36.0";
+@\x02\x05state\x08\x06params\x09\0\x0e\x04\0\x0ehandle-request\x01\x0f\x01o\x01\x07\
+\x01o\x02\x08\x10\x01j\x01\x11\x01s\x01@\x02\x05state\x08\x06params\x09\0\x12\x04\
+\0\x13handle-channel-open\x01\x13\x01o\x02\x05\x01\x01@\x02\x05state\x08\x06para\
+ms\x14\0\x0b\x04\0\x16handle-channel-message\x01\x15\x01o\x01\x05\x01@\x02\x05st\
+ate\x08\x06params\x16\0\x0b\x04\0\x14handle-channel-close\x01\x17\x04\0\"ntwk:th\
+eater/message-server-client\x05\x0b\x02\x03\0\0\x05state\x01B\x07\x02\x03\x02\x01\
+\x0c\x04\0\x05state\x03\0\0\x01o\x01s\x01o\x01\x01\x01j\x01\x03\x01s\x01@\x02\x05\
+state\x01\x06params\x02\0\x04\x04\0\x04init\x01\x05\x04\0\x12ntwk:theater/actor\x05\
+\x0d\x04\0\x18ntwk:theater/build-actor\x04\0\x0b\x11\x01\0\x0bbuild-actor\x03\0\0\
+\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.220.1\x10wit-bind\
+gen-rust\x060.36.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {
