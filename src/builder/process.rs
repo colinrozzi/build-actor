@@ -36,17 +36,10 @@ impl BuildProcess {
         // Log to system
         log(message);
 
-        // Get current timestamp
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
         // Send through channel
         let _ = self.send_update(BuildMessage::Log {
             level,
             message: message.to_string(),
-            timestamp,
         });
     }
 

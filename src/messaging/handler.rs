@@ -106,11 +106,15 @@ impl MessageHandler {
             Err(e) => return Err(format!("Failed to parse message: {}", e)),
         };
 
+        log(&format!("Received message: {:?}", message));
+
         // Get command type
         let command = match message.get("command").and_then(|v| v.as_str()) {
             Some(cmd) => cmd,
             None => return Err("Missing 'command' field".to_string()),
         };
+
+        log(&format!("Received command: {}", command));
 
         match command {
             "start_build" => {
@@ -171,10 +175,6 @@ impl MessageHandler {
                     let error_msg = BuildMessage::Log {
                         level: LogLevel::Error,
                         message: "No build state available".to_string(),
-                        timestamp: std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs(),
                     };
 
                     if let Ok(msg_json) = serde_json::to_vec(&error_msg) {

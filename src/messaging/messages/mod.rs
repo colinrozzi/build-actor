@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::state::BuildStatus;
+use serde::{Deserialize, Serialize};
 
 /// Build messages for communicating progress updates over a channel
 #[derive(Debug, Serialize, Deserialize)]
@@ -10,39 +10,26 @@ pub enum BuildMessage {
         description: String,
         percent_complete: Option<f32>,
     },
-    
+
     /// Log message
-    Log {
-        level: LogLevel,
-        message: String,
-        timestamp: u64,
-    },
-    
+    Log { level: LogLevel, message: String },
+
     /// File extraction notification
-    FileExtracted {
-        path: String,
-        size: usize,
-    },
-    
+    FileExtracted { path: String, size: usize },
+
     /// Command execution started
-    CommandStarted {
-        command: String,
-        args: Vec<String>,
-    },
-    
+    CommandStarted { command: String, args: Vec<String> },
+
     /// Command output chunks
-    CommandOutput {
-        stdout: String,
-        stderr: String,
-    },
-    
+    CommandOutput { stdout: String, stderr: String },
+
     /// Build complete notification
     BuildComplete {
         success: bool,
         wasm_path: Option<String>,
         wasm_hash: Option<String>,
         error: Option<String>,
-    }
+    },
 }
 
 /// Log levels for build messages
