@@ -3,10 +3,11 @@ mod bindings;
 use bindings::exports::ntwk::theater::actor::Guest;
 use bindings::exports::ntwk::theater::message_server_client::Guest as MessageServerClient;
 use bindings::ntwk::theater::filesystem;
+use bindings::ntwk::theater::message_server_host;
 use bindings::ntwk::theater::message_server_host::send;
 use bindings::ntwk::theater::runtime::log;
 use bindings::ntwk::theater::store::{self, ContentRef};
-use bindings::ntwk::theater::types::Json;
+use bindings::ntwk::theater::types::{self, Json, ChannelId};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -96,14 +97,14 @@ impl BuildState {
     // Stream an event on the active channel
     fn stream_event(&mut self, event_type: &str, content: serde_json::Value) -> Result<(), String> {
         if let (Some(channel_id), Some(operation_id)) = (&self.active_channel, &self.operation_id) {
-            let event = json!({{
+            let event = json!({
                 "event_type": event_type,
                 "source": "build-actor",
                 "timestamp": chrono::Utc::now().timestamp_millis(),
                 "sequence": self.event_sequence,
                 "operation_id": operation_id,
                 "content": content
-            }});
+            });
 
             self.event_sequence += 1;
 
@@ -140,7 +141,7 @@ impl MessageServerClient for Component {
     fn handle_channel_open(
         state_bytes: Option<Json>,
         params: (Json,),
-    ) -> Result<(Option<Json>, (bool, Option<Json>)), String> {
+    ) -> Result<(Option<Json>, types::ChannelAccept), String> {
         log("Build actor: Channel open request received");
 
         // Parse state
@@ -195,33 +196,36 @@ impl MessageServerClient for Component {
                 let response_bytes = serde_json::to_vec(&response).map_err(|e| e.to_string())?;
                 let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
 
-                return Ok((Some(updated_state), (true, Some(response_bytes))));
+                return Ok((Some(updated_state), types::ChannelAccept {
+                    accepted: true,
+                    message: Some(response_bytes),
+                }));
             }
         }
 
         // Reject other channel types
         let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
-        Ok((Some(updated_state), (false, None)))
+        Ok((Some(updated_state), types::ChannelAccept {
+            accepted: false,
+            message: None,
+        }))
     }
 
     /// Handle channel message
     fn handle_channel_message(
         state_bytes: Option<Json>,
-        params: (String, Json),
+        channel_id: ChannelId,
+        msg: Json,
     ) -> Result<(Option<Json>,), String> {
-        let (channel_id, msg) = params;
-        log(&format!(
-            "Build actor: Received message on channel {}",
-            channel_id
-        ));
-
+        log(&format!("Build actor: Received message on channel {}", channel_id));
+        
         // Parse state
         let mut state: BuildState = match state_bytes {
             Some(bytes) => serde_json::from_slice(&bytes)
                 .map_err(|e| format!("Failed to parse state: {}", e))?,
             None => return Ok((None,)),
         };
-
+        
         // Store the channel ID
         state.active_channel = Some(channel_id.clone());
 
@@ -312,11 +316,10 @@ impl MessageServerClient for Component {
     /// Handle channel close
     fn handle_channel_close(
         state_bytes: Option<Json>,
-        params: (String,),
+        channel_id: ChannelId,
     ) -> Result<(Option<Json>,), String> {
-        let (channel_id,) = params;
         log(&format!("Build actor: Channel {} closed", channel_id));
-
+        
         // Parse state
         let mut state: BuildState = match state_bytes {
             Some(bytes) => serde_json::from_slice(&bytes)
@@ -1341,10 +1344,12 @@ fn start_build_with_streaming(state: &mut BuildState) -> BuildOutput {
     }
 
     // Begin extracting files from virtual filesystem
-    let fs_hash = &state.fs_hash;
+    let fs_hash = state.fs_hash.clone();
+    let store_id = state.store_id.clone();
+    let build_store_id = state.build_store_id.clone();
 
     // Directory listing from root
-    match list_directory(fs_hash, "/", &state.store_id) {
+    match list_directory(&fs_hash, "/", &store_id) {
         Ok(entries) => {
             log(&format!("Found {} entries at root", entries.len()));
 
@@ -1359,7 +1364,7 @@ fn start_build_with_streaming(state: &mut BuildState) -> BuildOutput {
             }
 
             // Process entries recursively with streaming
-            match process_directory_with_streaming(fs_hash, "/", &entries, &state.store_id, state) {
+            match process_directory_with_streaming(&fs_hash, "/", &entries, &store_id, state) {
                 Ok(_) => {
                     log("Successfully extracted all files from virtual filesystem");
 
@@ -1388,7 +1393,7 @@ fn start_build_with_streaming(state: &mut BuildState) -> BuildOutput {
                     }
 
                     // Start the build process with streaming
-                    match execute_build_with_streaming(&state.build_store_id, state) {
+                    match execute_build_with_streaming(&build_store_id, state) {
                         Ok(build_output) => {
                             log(&format!(
                                 "Build completed with success={}",
