@@ -16,3 +16,13 @@ Added support for streaming build events via channels, enabling real-time monito
 - Detailed extraction and compilation logs
 - Error reporting with context
 - Build metrics and status updates
+
+## Testing
+
+To test the streaming functionality:
+
+1. Connect to the build actor with a channel
+2. Send an operation.started event with an operation_id
+3. Send a build.request message with required parameters
+4. Observe real-time events during the build process
+5. Verify that the channel is properly closed at the end
