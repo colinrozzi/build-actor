@@ -1,6 +1,6 @@
 package ntwk:theater;
 
-world runtime-content-fs {
+world build-actor {
     import runtime;
     import message-server-host;
     import filesystem;

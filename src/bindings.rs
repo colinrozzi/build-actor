@@ -2847,7 +2847,7 @@ mod _rt {
 /// ```
 #[allow(unused_macros)]
 #[doc(hidden)]
-macro_rules! __export_runtime_content_fs_impl {
+macro_rules! __export_build_actor_impl {
     ($ty:ident) => {
         self::export!($ty with_types_in self);
     };
@@ -2861,12 +2861,12 @@ macro_rules! __export_runtime_content_fs_impl {
     };
 }
 #[doc(inline)]
-pub(crate) use __export_runtime_content_fs_impl as export;
+pub(crate) use __export_build_actor_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[link_section = "component-type:wit-bindgen:0.36.0:ntwk:theater:runtime-content-fs:encoded world"]
+#[link_section = "component-type:wit-bindgen:0.36.0:ntwk:theater:build-actor:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 2292] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xeb\x10\x01A\x02\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 2278] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xe4\x10\x01A\x02\x01\
 A\x15\x01B\x14\x01p}\x04\0\x04json\x03\0\0\x01p}\x01k\x02\x04\0\x05state\x03\0\x03\
 \x01s\x04\0\x08actor-id\x03\0\x05\x01s\x04\0\x0achannel-id\x03\0\x07\x01k\x01\x01\
 r\x02\x08accepted\x7f\x07message\x09\x04\0\x0echannel-accept\x03\0\x0a\x01kw\x01\
@@ -2918,10 +2918,9 @@ arams\x09\0\x0b\x04\0\x0bhandle-send\x01\x0c\x01o\x02\x08\x09\x01j\x01\x0d\x01s\
 \x04\0\x14handle-channel-close\x01\x14\x04\0\"ntwk:theater/message-server-client\
 \x05\x0b\x02\x03\0\0\x05state\x01B\x07\x02\x03\x02\x01\x0c\x04\0\x05state\x03\0\0\
 \x01o\x01s\x01o\x01\x01\x01j\x01\x03\x01s\x01@\x02\x05state\x01\x06params\x02\0\x04\
-\x04\0\x04init\x01\x05\x04\0\x12ntwk:theater/actor\x05\x0d\x04\0\x1fntwk:theater\
-/runtime-content-fs\x04\0\x0b\x18\x01\0\x12runtime-content-fs\x03\0\0\0G\x09prod\
-ucers\x01\x0cprocessed-by\x02\x0dwit-component\x070.220.1\x10wit-bindgen-rust\x06\
-0.36.0";
+\x04\0\x04init\x01\x05\x04\0\x12ntwk:theater/actor\x05\x0d\x04\0\x18ntwk:theater\
+/build-actor\x04\0\x0b\x11\x01\0\x0bbuild-actor\x03\0\0\0G\x09producers\x01\x0cp\
+rocessed-by\x02\x0dwit-component\x070.220.1\x10wit-bindgen-rust\x060.36.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {
