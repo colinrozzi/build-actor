@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0] - 2025-03-20
+
+### Added
+- Converted build process to use channel-based communication
+- Added real-time progress updates during build process
+- Implemented structured message format for build events
+- Added support for querying build status via channel
+- Enhanced logging with severity levels
+
 ## [0.2.0] - 2025-03-04
 
 ### Changed

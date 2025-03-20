@@ -1,0 +1,92 @@
+{
+  "steps": [
+    {
+      "description": "Open channel to build-actor",
+      "action": "open_channel",
+      "address": "@build-actor",
+      "message": {}
+    },
+    {
+      "description": "Start build process",
+      "action": "send_channel_message",
+      "channel_id": "${channel_id_0}",
+      "message": {
+        "command": "start_build",
+        "fs_hash": "content-12345",
+        "store_id": "test-store"
+      },
+      "expect": {
+        "type": "channel_message",
+        "pattern": {
+          "Progress": {
+            "status": "NotStarted",
+            "description": "Starting build process"
+          }
+        }
+      }
+    },
+    {
+      "description": "Wait for extraction progress",
+      "action": "expect",
+      "expectation": {
+        "type": "channel_message",
+        "pattern": {
+          "Progress": {
+            "status": "Extracting"
+          }
+        }
+      }
+    },
+    {
+      "description": "Wait for build to start",
+      "action": "expect",
+      "expectation": {
+        "type": "channel_message",
+        "pattern": {
+          "Progress": {
+            "status": "Building"
+          }
+        }
+      }
+    },
+    {
+      "description": "Wait for command to start",
+      "action": "expect",
+      "expectation": {
+        "type": "channel_message",
+        "pattern": {
+          "CommandStarted": {}
+        }
+      }
+    },
+    {
+      "description": "Wait for build completion",
+      "action": "expect",
+      "expectation": {
+        "type": "channel_message",
+        "pattern": {
+          "BuildComplete": {}
+        }
+      }
+    },
+    {
+      "description": "Query build status",
+      "action": "send_channel_message",
+      "channel_id": "${channel_id_0}",
+      "message": {
+        "command": "check_status"
+      },
+      "expect": {
+        "type": "channel_message",
+        "pattern": {
+          "Progress": {}
+        }
+      }
+    },
+    {
+      "description": "Close channel",
+      "action": "close_channel",
+      "channel_id": "${channel_id_0}"
+    }
+  ]
+}

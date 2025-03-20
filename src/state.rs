@@ -13,6 +13,9 @@ pub struct BuildState {
 
     // Build output information
     pub build_output: Option<BuildOutput>,
+
+    // Channel ID for sending progress updates
+    pub channel_id: Option<String>,
 }
 
 /// Status of the build process
@@ -44,6 +47,7 @@ impl BuildState {
             fs_hash,
             status: BuildStatus::NotStarted,
             build_output: None,
+            channel_id: None,
         }
     }
 
