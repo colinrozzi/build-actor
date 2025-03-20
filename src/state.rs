@@ -53,7 +53,7 @@ impl BuildState {
     }
 
     pub fn set_build_output(&mut self, output: BuildOutput) -> &mut Self {
-        self.build_output = Some(output);
+        self.build_output = Some(output.clone());
         if output.success {
             self.status = BuildStatus::Completed;
         } else {

@@ -1,9 +1,9 @@
 mod bindings;
-mod state;
-mod filesystem;
 mod builder;
-mod messaging;
 mod error;
+mod filesystem;
+mod messaging;
+mod state;
 
 #[cfg(test)]
 mod tests;
@@ -17,8 +17,7 @@ struct Component;
 
 impl Guest for Component {
     /// Initialize the build actor
-    fn init(init_data: Option<bindings::exports::ntwk::theater::actor::Json>, params: (String,)) 
-        -> Result<(Option<bindings::exports::ntwk::theater::actor::Json>,), String> {
+    fn init(init_data: Option<Vec<u8>>, params: (String,)) -> Result<(Option<Vec<u8>>,), String> {
         MessageHandler::init(init_data, params)
     }
 }
@@ -26,9 +25,10 @@ impl Guest for Component {
 impl MessageServerClient for Component {
     /// Handle send messages
     fn handle_send(
-        state: Option<bindings::exports::ntwk::theater::message_server_client::Json>, 
-        params: (bindings::exports::ntwk::theater::message_server_client::Json,)
-    ) -> Result<(Option<bindings::exports::ntwk::theater::message_server_client::Json>,), String> {
+        state: Option<bindings::exports::ntwk::theater::message_server_client::Json>,
+        params: (bindings::exports::ntwk::theater::message_server_client::Json,),
+    ) -> Result<(Option<bindings::exports::ntwk::theater::message_server_client::Json>,), String>
+    {
         MessageHandler::handle_send(state, params)
     }
 
@@ -36,7 +36,13 @@ impl MessageServerClient for Component {
     fn handle_request(
         state: Option<bindings::exports::ntwk::theater::message_server_client::Json>,
         params: (bindings::exports::ntwk::theater::message_server_client::Json,),
-    ) -> Result<(Option<bindings::exports::ntwk::theater::message_server_client::Json>, (bindings::exports::ntwk::theater::message_server_client::Json,)), String> {
+    ) -> Result<
+        (
+            Option<bindings::exports::ntwk::theater::message_server_client::Json>,
+            (bindings::exports::ntwk::theater::message_server_client::Json,),
+        ),
+        String,
+    > {
         MessageHandler::handle_request(state, params)
     }
 

@@ -1,6 +1,6 @@
+use crate::bindings::ntwk::theater::store::{self, ContentRef};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::bindings::ntwk::theater::store::{self, ContentRef};
 
 /// Types of filesystem nodes
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -31,14 +31,14 @@ pub struct DirectoryEntry {
 
 /// Wrapper around the Theater runtime's content store
 pub struct ContentStore {
-    store_id: String,
+    pub store_id: String,
 }
 
 impl ContentStore {
     pub fn new(store_id: String) -> Self {
         Self { store_id }
     }
-    
+
     /// Get a node from the content store by its hash
     pub fn get_node(&self, hash: &str) -> Result<FSNode, String> {
         let content_ref = ContentRef {
@@ -55,7 +55,7 @@ impl ContentStore {
             Err(e) => Err(format!("Failed to parse node: {}", e)),
         }
     }
-    
+
     /// Get a reference to the store ID
     pub fn store_id(&self) -> &str {
         &self.store_id
