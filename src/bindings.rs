@@ -16,6 +16,23 @@ pub mod ntwk {
             pub type Json = _rt::Vec<u8>;
             pub type State = Option<_rt::Vec<u8>>;
             pub type ActorId = _rt::String;
+            pub type ChannelId = _rt::String;
+            #[derive(Clone)]
+            pub struct ChannelAccept {
+                pub accepted: bool,
+                pub message: Option<Json>,
+            }
+            impl ::core::fmt::Debug for ChannelAccept {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("ChannelAccept")
+                        .field("accepted", &self.accepted)
+                        .field("message", &self.message)
+                        .finish()
+                }
+            }
             #[derive(Clone)]
             pub struct Event {
                 pub event_type: _rt::String,
@@ -160,6 +177,7 @@ pub mod ntwk {
             use super::super::super::_rt;
             pub type Json = super::super::super::ntwk::theater::types::Json;
             pub type ActorId = super::super::super::ntwk::theater::types::ActorId;
+            pub type ChannelId = super::super::super::ntwk::theater::types::ChannelId;
             #[allow(unused_unsafe, clippy::all)]
             /// send and forget message
             pub fn send(actor_id: &ActorId, msg: &Json) -> Result<(), _rt::String> {
@@ -280,6 +298,188 @@ pub mod ntwk {
                                     len9,
                                 );
                                 _rt::string_lift(bytes9)
+                            };
+                            Err(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    }
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            /// channel operations
+            pub fn open_channel(
+                actor_id: &ActorId,
+                initial_msg: &Json,
+            ) -> Result<ChannelId, _rt::String> {
+                unsafe {
+                    #[repr(align(4))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 12]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 12]);
+                    let vec0 = actor_id;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let vec1 = initial_msg;
+                    let ptr1 = vec1.as_ptr().cast::<u8>();
+                    let len1 = vec1.len();
+                    let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "ntwk:theater/message-server-host")]
+                    extern "C" {
+                        #[link_name = "open-channel"]
+                        fn wit_import(
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        );
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    fn wit_import(
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                    ) {
+                        unreachable!()
+                    }
+                    wit_import(ptr0.cast_mut(), len0, ptr1.cast_mut(), len1, ptr2);
+                    let l3 = i32::from(*ptr2.add(0).cast::<u8>());
+                    match l3 {
+                        0 => {
+                            let e = {
+                                let l4 = *ptr2.add(4).cast::<*mut u8>();
+                                let l5 = *ptr2.add(8).cast::<usize>();
+                                let len6 = l5;
+                                let bytes6 = _rt::Vec::from_raw_parts(
+                                    l4.cast(),
+                                    len6,
+                                    len6,
+                                );
+                                _rt::string_lift(bytes6)
+                            };
+                            Ok(e)
+                        }
+                        1 => {
+                            let e = {
+                                let l7 = *ptr2.add(4).cast::<*mut u8>();
+                                let l8 = *ptr2.add(8).cast::<usize>();
+                                let len9 = l8;
+                                let bytes9 = _rt::Vec::from_raw_parts(
+                                    l7.cast(),
+                                    len9,
+                                    len9,
+                                );
+                                _rt::string_lift(bytes9)
+                            };
+                            Err(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    }
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            pub fn send_on_channel(
+                channel_id: &ChannelId,
+                msg: &Json,
+            ) -> Result<(), _rt::String> {
+                unsafe {
+                    #[repr(align(4))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 12]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 12]);
+                    let vec0 = channel_id;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let vec1 = msg;
+                    let ptr1 = vec1.as_ptr().cast::<u8>();
+                    let len1 = vec1.len();
+                    let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "ntwk:theater/message-server-host")]
+                    extern "C" {
+                        #[link_name = "send-on-channel"]
+                        fn wit_import(
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                            _: usize,
+                            _: *mut u8,
+                        );
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    fn wit_import(
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                        _: usize,
+                        _: *mut u8,
+                    ) {
+                        unreachable!()
+                    }
+                    wit_import(ptr0.cast_mut(), len0, ptr1.cast_mut(), len1, ptr2);
+                    let l3 = i32::from(*ptr2.add(0).cast::<u8>());
+                    match l3 {
+                        0 => {
+                            let e = ();
+                            Ok(e)
+                        }
+                        1 => {
+                            let e = {
+                                let l4 = *ptr2.add(4).cast::<*mut u8>();
+                                let l5 = *ptr2.add(8).cast::<usize>();
+                                let len6 = l5;
+                                let bytes6 = _rt::Vec::from_raw_parts(
+                                    l4.cast(),
+                                    len6,
+                                    len6,
+                                );
+                                _rt::string_lift(bytes6)
+                            };
+                            Err(e)
+                        }
+                        _ => _rt::invalid_enum_discriminant(),
+                    }
+                }
+            }
+            #[allow(unused_unsafe, clippy::all)]
+            pub fn close_channel(channel_id: &ChannelId) -> Result<(), _rt::String> {
+                unsafe {
+                    #[repr(align(4))]
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 12]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 12]);
+                    let vec0 = channel_id;
+                    let ptr0 = vec0.as_ptr().cast::<u8>();
+                    let len0 = vec0.len();
+                    let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "ntwk:theater/message-server-host")]
+                    extern "C" {
+                        #[link_name = "close-channel"]
+                        fn wit_import(_: *mut u8, _: usize, _: *mut u8);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    fn wit_import(_: *mut u8, _: usize, _: *mut u8) {
+                        unreachable!()
+                    }
+                    wit_import(ptr0.cast_mut(), len0, ptr1);
+                    let l2 = i32::from(*ptr1.add(0).cast::<u8>());
+                    match l2 {
+                        0 => {
+                            let e = ();
+                            Ok(e)
+                        }
+                        1 => {
+                            let e = {
+                                let l3 = *ptr1.add(4).cast::<*mut u8>();
+                                let l4 = *ptr1.add(8).cast::<usize>();
+                                let len5 = l4;
+                                let bytes5 = _rt::Vec::from_raw_parts(
+                                    l3.cast(),
+                                    len5,
+                                    len5,
+                                );
+                                _rt::string_lift(bytes5)
                             };
                             Err(e)
                         }
@@ -1912,6 +2112,8 @@ pub mod exports {
                 static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
                 use super::super::super::super::_rt;
                 pub type Json = super::super::super::super::ntwk::theater::types::Json;
+                pub type ChannelId = super::super::super::super::ntwk::theater::types::ChannelId;
+                pub type ChannelAccept = super::super::super::super::ntwk::theater::types::ChannelAccept;
                 #[doc(hidden)]
                 #[allow(non_snake_case)]
                 pub unsafe fn _export_handle_send_cabi<T: Guest>(
@@ -2088,6 +2290,300 @@ pub mod exports {
                         }
                     }
                 }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn _export_handle_channel_open_cabi<T: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                    arg3: *mut u8,
+                    arg4: usize,
+                ) -> *mut u8 {
+                    #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                    let len1 = arg4;
+                    let result2 = T::handle_channel_open(
+                        match arg0 {
+                            0 => None,
+                            1 => {
+                                let e = {
+                                    let len0 = arg2;
+                                    _rt::Vec::from_raw_parts(arg1.cast(), len0, len0)
+                                };
+                                Some(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        },
+                        (_rt::Vec::from_raw_parts(arg3.cast(), len1, len1),),
+                    );
+                    let ptr3 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
+                    match result2 {
+                        Ok(e) => {
+                            *ptr3.add(0).cast::<u8>() = (0i32) as u8;
+                            let (t4_0, t4_1) = e;
+                            match t4_0 {
+                                Some(e) => {
+                                    *ptr3.add(4).cast::<u8>() = (1i32) as u8;
+                                    let vec5 = (e).into_boxed_slice();
+                                    let ptr5 = vec5.as_ptr().cast::<u8>();
+                                    let len5 = vec5.len();
+                                    ::core::mem::forget(vec5);
+                                    *ptr3.add(12).cast::<usize>() = len5;
+                                    *ptr3.add(8).cast::<*mut u8>() = ptr5.cast_mut();
+                                }
+                                None => {
+                                    *ptr3.add(4).cast::<u8>() = (0i32) as u8;
+                                }
+                            };
+                            let (t6_0,) = t4_1;
+                            let super::super::super::super::ntwk::theater::types::ChannelAccept {
+                                accepted: accepted7,
+                                message: message7,
+                            } = t6_0;
+                            *ptr3.add(16).cast::<u8>() = (match accepted7 {
+                                true => 1,
+                                false => 0,
+                            }) as u8;
+                            match message7 {
+                                Some(e) => {
+                                    *ptr3.add(20).cast::<u8>() = (1i32) as u8;
+                                    let vec8 = (e).into_boxed_slice();
+                                    let ptr8 = vec8.as_ptr().cast::<u8>();
+                                    let len8 = vec8.len();
+                                    ::core::mem::forget(vec8);
+                                    *ptr3.add(28).cast::<usize>() = len8;
+                                    *ptr3.add(24).cast::<*mut u8>() = ptr8.cast_mut();
+                                }
+                                None => {
+                                    *ptr3.add(20).cast::<u8>() = (0i32) as u8;
+                                }
+                            };
+                        }
+                        Err(e) => {
+                            *ptr3.add(0).cast::<u8>() = (1i32) as u8;
+                            let vec9 = (e.into_bytes()).into_boxed_slice();
+                            let ptr9 = vec9.as_ptr().cast::<u8>();
+                            let len9 = vec9.len();
+                            ::core::mem::forget(vec9);
+                            *ptr3.add(8).cast::<usize>() = len9;
+                            *ptr3.add(4).cast::<*mut u8>() = ptr9.cast_mut();
+                        }
+                    };
+                    ptr3
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_handle_channel_open<T: Guest>(
+                    arg0: *mut u8,
+                ) {
+                    let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                    match l0 {
+                        0 => {
+                            let l1 = i32::from(*arg0.add(4).cast::<u8>());
+                            match l1 {
+                                0 => {}
+                                _ => {
+                                    let l2 = *arg0.add(8).cast::<*mut u8>();
+                                    let l3 = *arg0.add(12).cast::<usize>();
+                                    let base4 = l2;
+                                    let len4 = l3;
+                                    _rt::cabi_dealloc(base4, len4 * 1, 1);
+                                }
+                            }
+                            let l5 = i32::from(*arg0.add(20).cast::<u8>());
+                            match l5 {
+                                0 => {}
+                                _ => {
+                                    let l6 = *arg0.add(24).cast::<*mut u8>();
+                                    let l7 = *arg0.add(28).cast::<usize>();
+                                    let base8 = l6;
+                                    let len8 = l7;
+                                    _rt::cabi_dealloc(base8, len8 * 1, 1);
+                                }
+                            }
+                        }
+                        _ => {
+                            let l9 = *arg0.add(4).cast::<*mut u8>();
+                            let l10 = *arg0.add(8).cast::<usize>();
+                            _rt::cabi_dealloc(l9, l10, 1);
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn _export_handle_channel_message_cabi<T: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                    arg3: *mut u8,
+                    arg4: usize,
+                    arg5: *mut u8,
+                    arg6: usize,
+                ) -> *mut u8 {
+                    #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                    let len1 = arg4;
+                    let bytes1 = _rt::Vec::from_raw_parts(arg3.cast(), len1, len1);
+                    let len2 = arg6;
+                    let result3 = T::handle_channel_message(
+                        match arg0 {
+                            0 => None,
+                            1 => {
+                                let e = {
+                                    let len0 = arg2;
+                                    _rt::Vec::from_raw_parts(arg1.cast(), len0, len0)
+                                };
+                                Some(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        },
+                        (
+                            _rt::string_lift(bytes1),
+                            _rt::Vec::from_raw_parts(arg5.cast(), len2, len2),
+                        ),
+                    );
+                    let ptr4 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
+                    match result3 {
+                        Ok(e) => {
+                            *ptr4.add(0).cast::<u8>() = (0i32) as u8;
+                            let (t5_0,) = e;
+                            match t5_0 {
+                                Some(e) => {
+                                    *ptr4.add(4).cast::<u8>() = (1i32) as u8;
+                                    let vec6 = (e).into_boxed_slice();
+                                    let ptr6 = vec6.as_ptr().cast::<u8>();
+                                    let len6 = vec6.len();
+                                    ::core::mem::forget(vec6);
+                                    *ptr4.add(12).cast::<usize>() = len6;
+                                    *ptr4.add(8).cast::<*mut u8>() = ptr6.cast_mut();
+                                }
+                                None => {
+                                    *ptr4.add(4).cast::<u8>() = (0i32) as u8;
+                                }
+                            };
+                        }
+                        Err(e) => {
+                            *ptr4.add(0).cast::<u8>() = (1i32) as u8;
+                            let vec7 = (e.into_bytes()).into_boxed_slice();
+                            let ptr7 = vec7.as_ptr().cast::<u8>();
+                            let len7 = vec7.len();
+                            ::core::mem::forget(vec7);
+                            *ptr4.add(8).cast::<usize>() = len7;
+                            *ptr4.add(4).cast::<*mut u8>() = ptr7.cast_mut();
+                        }
+                    };
+                    ptr4
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_handle_channel_message<T: Guest>(
+                    arg0: *mut u8,
+                ) {
+                    let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                    match l0 {
+                        0 => {
+                            let l1 = i32::from(*arg0.add(4).cast::<u8>());
+                            match l1 {
+                                0 => {}
+                                _ => {
+                                    let l2 = *arg0.add(8).cast::<*mut u8>();
+                                    let l3 = *arg0.add(12).cast::<usize>();
+                                    let base4 = l2;
+                                    let len4 = l3;
+                                    _rt::cabi_dealloc(base4, len4 * 1, 1);
+                                }
+                            }
+                        }
+                        _ => {
+                            let l5 = *arg0.add(4).cast::<*mut u8>();
+                            let l6 = *arg0.add(8).cast::<usize>();
+                            _rt::cabi_dealloc(l5, l6, 1);
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn _export_handle_channel_close_cabi<T: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                    arg3: *mut u8,
+                    arg4: usize,
+                ) -> *mut u8 {
+                    #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                    let len1 = arg4;
+                    let bytes1 = _rt::Vec::from_raw_parts(arg3.cast(), len1, len1);
+                    let result2 = T::handle_channel_close(
+                        match arg0 {
+                            0 => None,
+                            1 => {
+                                let e = {
+                                    let len0 = arg2;
+                                    _rt::Vec::from_raw_parts(arg1.cast(), len0, len0)
+                                };
+                                Some(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        },
+                        (_rt::string_lift(bytes1),),
+                    );
+                    let ptr3 = _RET_AREA.0.as_mut_ptr().cast::<u8>();
+                    match result2 {
+                        Ok(e) => {
+                            *ptr3.add(0).cast::<u8>() = (0i32) as u8;
+                            let (t4_0,) = e;
+                            match t4_0 {
+                                Some(e) => {
+                                    *ptr3.add(4).cast::<u8>() = (1i32) as u8;
+                                    let vec5 = (e).into_boxed_slice();
+                                    let ptr5 = vec5.as_ptr().cast::<u8>();
+                                    let len5 = vec5.len();
+                                    ::core::mem::forget(vec5);
+                                    *ptr3.add(12).cast::<usize>() = len5;
+                                    *ptr3.add(8).cast::<*mut u8>() = ptr5.cast_mut();
+                                }
+                                None => {
+                                    *ptr3.add(4).cast::<u8>() = (0i32) as u8;
+                                }
+                            };
+                        }
+                        Err(e) => {
+                            *ptr3.add(0).cast::<u8>() = (1i32) as u8;
+                            let vec6 = (e.into_bytes()).into_boxed_slice();
+                            let ptr6 = vec6.as_ptr().cast::<u8>();
+                            let len6 = vec6.len();
+                            ::core::mem::forget(vec6);
+                            *ptr3.add(8).cast::<usize>() = len6;
+                            *ptr3.add(4).cast::<*mut u8>() = ptr6.cast_mut();
+                        }
+                    };
+                    ptr3
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_handle_channel_close<T: Guest>(
+                    arg0: *mut u8,
+                ) {
+                    let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                    match l0 {
+                        0 => {
+                            let l1 = i32::from(*arg0.add(4).cast::<u8>());
+                            match l1 {
+                                0 => {}
+                                _ => {
+                                    let l2 = *arg0.add(8).cast::<*mut u8>();
+                                    let l3 = *arg0.add(12).cast::<usize>();
+                                    let base4 = l2;
+                                    let len4 = l3;
+                                    _rt::cabi_dealloc(base4, len4 * 1, 1);
+                                }
+                            }
+                        }
+                        _ => {
+                            let l5 = *arg0.add(4).cast::<*mut u8>();
+                            let l6 = *arg0.add(8).cast::<usize>();
+                            _rt::cabi_dealloc(l5, l6, 1);
+                        }
+                    }
+                }
                 pub trait Guest {
                     fn handle_send(
                         state: Option<Json>,
@@ -2097,6 +2593,19 @@ pub mod exports {
                         state: Option<Json>,
                         params: (Json,),
                     ) -> Result<(Option<Json>, (Json,)), _rt::String>;
+                    /// Channel operations
+                    fn handle_channel_open(
+                        state: Option<Json>,
+                        params: (Json,),
+                    ) -> Result<(Option<Json>, (ChannelAccept,)), _rt::String>;
+                    fn handle_channel_message(
+                        state: Option<Json>,
+                        params: (ChannelId, Json),
+                    ) -> Result<(Option<Json>,), _rt::String>;
+                    fn handle_channel_close(
+                        state: Option<Json>,
+                        params: (ChannelId,),
+                    ) -> Result<(Option<Json>,), _rt::String>;
                 }
                 #[doc(hidden)]
                 macro_rules! __export_ntwk_theater_message_server_client_cabi {
@@ -2119,15 +2628,44 @@ pub mod exports {
                         "cabi_post_ntwk:theater/message-server-client#handle-request"]
                         unsafe extern "C" fn _post_return_handle_request(arg0 : * mut
                         u8,) { $($path_to_types)*:: __post_return_handle_request::<$ty >
-                        (arg0) } };
+                        (arg0) } #[export_name =
+                        "ntwk:theater/message-server-client#handle-channel-open"] unsafe
+                        extern "C" fn export_handle_channel_open(arg0 : i32, arg1 : * mut
+                        u8, arg2 : usize, arg3 : * mut u8, arg4 : usize,) -> * mut u8 {
+                        $($path_to_types)*:: _export_handle_channel_open_cabi::<$ty >
+                        (arg0, arg1, arg2, arg3, arg4) } #[export_name =
+                        "cabi_post_ntwk:theater/message-server-client#handle-channel-open"]
+                        unsafe extern "C" fn _post_return_handle_channel_open(arg0 : *
+                        mut u8,) { $($path_to_types)*::
+                        __post_return_handle_channel_open::<$ty > (arg0) } #[export_name
+                        = "ntwk:theater/message-server-client#handle-channel-message"]
+                        unsafe extern "C" fn export_handle_channel_message(arg0 : i32,
+                        arg1 : * mut u8, arg2 : usize, arg3 : * mut u8, arg4 : usize,
+                        arg5 : * mut u8, arg6 : usize,) -> * mut u8 {
+                        $($path_to_types)*:: _export_handle_channel_message_cabi::<$ty >
+                        (arg0, arg1, arg2, arg3, arg4, arg5, arg6) } #[export_name =
+                        "cabi_post_ntwk:theater/message-server-client#handle-channel-message"]
+                        unsafe extern "C" fn _post_return_handle_channel_message(arg0 : *
+                        mut u8,) { $($path_to_types)*::
+                        __post_return_handle_channel_message::<$ty > (arg0) }
+                        #[export_name =
+                        "ntwk:theater/message-server-client#handle-channel-close"] unsafe
+                        extern "C" fn export_handle_channel_close(arg0 : i32, arg1 : *
+                        mut u8, arg2 : usize, arg3 : * mut u8, arg4 : usize,) -> * mut u8
+                        { $($path_to_types)*:: _export_handle_channel_close_cabi::<$ty >
+                        (arg0, arg1, arg2, arg3, arg4) } #[export_name =
+                        "cabi_post_ntwk:theater/message-server-client#handle-channel-close"]
+                        unsafe extern "C" fn _post_return_handle_channel_close(arg0 : *
+                        mut u8,) { $($path_to_types)*::
+                        __post_return_handle_channel_close::<$ty > (arg0) } };
                     };
                 }
                 #[doc(hidden)]
                 pub(crate) use __export_ntwk_theater_message_server_client_cabi;
                 #[repr(align(4))]
-                struct _RetArea([::core::mem::MaybeUninit<u8>; 24]);
+                struct _RetArea([::core::mem::MaybeUninit<u8>; 32]);
                 static mut _RET_AREA: _RetArea = _RetArea(
-                    [::core::mem::MaybeUninit::uninit(); 24],
+                    [::core::mem::MaybeUninit::uninit(); 32],
                 );
             }
             #[allow(dead_code, clippy::all)]
@@ -2329,50 +2867,61 @@ pub(crate) use __export_runtime_content_fs_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[link_section = "component-type:wit-bindgen:0.36.0:ntwk:theater:runtime-content-fs:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 1840] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xa7\x0d\x01A\x02\x01\
-A\x13\x01B\x0f\x01p}\x04\0\x04json\x03\0\0\x01p}\x01k\x02\x04\0\x05state\x03\0\x03\
-\x01s\x04\0\x08actor-id\x03\0\x05\x01kw\x01r\x03\x0aevent-types\x06parent\x07\x04\
-data\x01\x04\0\x05event\x03\0\x08\x01r\x02\x04hashw\x05event\x09\x04\0\x0ameta-e\
-vent\x03\0\x0a\x01p\x0b\x01r\x01\x06events\x0c\x04\0\x05chain\x03\0\x0d\x03\0\x12\
-ntwk:theater/types\x05\0\x02\x03\0\0\x04json\x02\x03\0\0\x05chain\x02\x03\0\0\x08\
-actor-id\x01B\x0a\x02\x03\x02\x01\x01\x04\0\x04json\x03\0\0\x02\x03\x02\x01\x02\x04\
-\0\x05chain\x03\0\x02\x02\x03\x02\x01\x03\x04\0\x08actor-id\x03\0\x04\x01@\x01\x03\
-msgs\x01\0\x04\0\x03log\x01\x06\x01@\0\0\x03\x04\0\x09get-chain\x01\x07\x03\0\x14\
-ntwk:theater/runtime\x05\x04\x01B\x0a\x02\x03\x02\x01\x01\x04\0\x04json\x03\0\0\x02\
-\x03\x02\x01\x03\x04\0\x08actor-id\x03\0\x02\x01j\0\x01s\x01@\x02\x08actor-id\x03\
-\x03msg\x01\0\x04\x04\0\x04send\x01\x05\x01j\x01\x01\x01s\x01@\x02\x08actor-id\x03\
-\x03msg\x01\0\x06\x04\0\x07request\x01\x07\x03\0\x20ntwk:theater/message-server-\
-host\x05\x05\x01B\x17\x01p}\x01j\x01\0\x01s\x01@\x01\x04paths\0\x01\x04\0\x09rea\
-d-file\x01\x02\x01j\0\x01s\x01@\x02\x04paths\x07contents\0\x03\x04\0\x0awrite-fi\
-le\x01\x04\x01ps\x01j\x01\x05\x01s\x01@\x01\x04paths\0\x06\x04\0\x0alist-files\x01\
-\x07\x01@\x01\x04paths\0\x03\x04\0\x0bdelete-file\x01\x08\x04\0\x0acreate-dir\x01\
-\x08\x04\0\x0adelete-dir\x01\x08\x01j\x01\x7f\x01s\x01@\x01\x04paths\0\x09\x04\0\
-\x0bpath-exists\x01\x0a\x01j\x01s\x01s\x01@\x03\x03dirs\x07commands\x04args\x05\0\
-\x0b\x04\0\x0fexecute-command\x01\x0c\x01@\x02\x03dirs\x07commands\0\x0b\x04\0\x13\
-execute-nix-command\x01\x0d\x03\0\x17ntwk:theater/filesystem\x05\x06\x01B(\x01r\x01\
-\x04hashs\x04\0\x0bcontent-ref\x03\0\0\x01j\x01s\x01s\x01@\0\0\x02\x04\0\x03new\x01\
-\x03\x01p}\x01j\x01\x01\x01s\x01@\x02\x08store-ids\x07content\x04\0\x05\x04\0\x05\
-store\x01\x06\x01j\x01\x04\x01s\x01@\x02\x08store-ids\x0bcontent-ref\x01\0\x07\x04\
-\0\x03get\x01\x08\x01j\x01\x7f\x01s\x01@\x02\x08store-ids\x0bcontent-ref\x01\0\x09\
-\x04\0\x06exists\x01\x0a\x01j\0\x01s\x01@\x03\x08store-ids\x05labels\x0bcontent-\
-ref\x01\0\x0b\x04\0\x05label\x01\x0c\x01k\x01\x01j\x01\x0d\x01s\x01@\x02\x08stor\
-e-ids\x05labels\0\x0e\x04\0\x0cget-by-label\x01\x0f\x01@\x02\x08store-ids\x05lab\
-els\0\x0b\x04\0\x0cremove-label\x01\x10\x04\0\x11remove-from-label\x01\x0c\x01@\x03\
-\x08store-ids\x05labels\x07content\x04\0\x05\x04\0\x0estore-at-label\x01\x11\x04\
-\0\x18replace-content-at-label\x01\x11\x04\0\x10replace-at-label\x01\x0c\x01ps\x01\
-j\x01\x12\x01s\x01@\x01\x08store-ids\0\x13\x04\0\x0blist-labels\x01\x14\x01p\x01\
-\x01j\x01\x15\x01s\x01@\x01\x08store-ids\0\x16\x04\0\x10list-all-content\x01\x17\
-\x01j\x01w\x01s\x01@\x01\x08store-ids\0\x18\x04\0\x14calculate-total-size\x01\x19\
-\x03\0\x12ntwk:theater/store\x05\x07\x02\x03\0\0\x05event\x01B\x0e\x02\x03\x02\x01\
-\x01\x04\0\x04json\x03\0\0\x02\x03\x02\x01\x08\x04\0\x05event\x03\0\x02\x01k\x01\
-\x01o\x01\x01\x01o\x01\x04\x01j\x01\x06\x01s\x01@\x02\x05state\x04\x06params\x05\
-\0\x07\x04\0\x0bhandle-send\x01\x08\x01o\x02\x04\x05\x01j\x01\x09\x01s\x01@\x02\x05\
-state\x04\x06params\x05\0\x0a\x04\0\x0ehandle-request\x01\x0b\x04\0\"ntwk:theate\
-r/message-server-client\x05\x09\x02\x03\0\0\x05state\x01B\x07\x02\x03\x02\x01\x0a\
-\x04\0\x05state\x03\0\0\x01o\x01s\x01o\x01\x01\x01j\x01\x03\x01s\x01@\x02\x05sta\
-te\x01\x06params\x02\0\x04\x04\0\x04init\x01\x05\x04\0\x12ntwk:theater/actor\x05\
-\x0b\x04\0\x1fntwk:theater/runtime-content-fs\x04\0\x0b\x18\x01\0\x12runtime-con\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 2292] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xeb\x10\x01A\x02\x01\
+A\x15\x01B\x14\x01p}\x04\0\x04json\x03\0\0\x01p}\x01k\x02\x04\0\x05state\x03\0\x03\
+\x01s\x04\0\x08actor-id\x03\0\x05\x01s\x04\0\x0achannel-id\x03\0\x07\x01k\x01\x01\
+r\x02\x08accepted\x7f\x07message\x09\x04\0\x0echannel-accept\x03\0\x0a\x01kw\x01\
+r\x03\x0aevent-types\x06parent\x0c\x04data\x01\x04\0\x05event\x03\0\x0d\x01r\x02\
+\x04hashw\x05event\x0e\x04\0\x0ameta-event\x03\0\x0f\x01p\x10\x01r\x01\x06events\
+\x11\x04\0\x05chain\x03\0\x12\x03\0\x12ntwk:theater/types\x05\0\x02\x03\0\0\x04j\
+son\x02\x03\0\0\x05chain\x02\x03\0\0\x08actor-id\x01B\x0a\x02\x03\x02\x01\x01\x04\
+\0\x04json\x03\0\0\x02\x03\x02\x01\x02\x04\0\x05chain\x03\0\x02\x02\x03\x02\x01\x03\
+\x04\0\x08actor-id\x03\0\x04\x01@\x01\x03msgs\x01\0\x04\0\x03log\x01\x06\x01@\0\0\
+\x03\x04\0\x09get-chain\x01\x07\x03\0\x14ntwk:theater/runtime\x05\x04\x02\x03\0\0\
+\x0achannel-id\x01B\x13\x02\x03\x02\x01\x01\x04\0\x04json\x03\0\0\x02\x03\x02\x01\
+\x03\x04\0\x08actor-id\x03\0\x02\x02\x03\x02\x01\x05\x04\0\x0achannel-id\x03\0\x04\
+\x01j\0\x01s\x01@\x02\x08actor-id\x03\x03msg\x01\0\x06\x04\0\x04send\x01\x07\x01\
+j\x01\x01\x01s\x01@\x02\x08actor-id\x03\x03msg\x01\0\x08\x04\0\x07request\x01\x09\
+\x01j\x01\x05\x01s\x01@\x02\x08actor-id\x03\x0binitial-msg\x01\0\x0a\x04\0\x0cop\
+en-channel\x01\x0b\x01@\x02\x0achannel-id\x05\x03msg\x01\0\x06\x04\0\x0fsend-on-\
+channel\x01\x0c\x01@\x01\x0achannel-id\x05\0\x06\x04\0\x0dclose-channel\x01\x0d\x03\
+\0\x20ntwk:theater/message-server-host\x05\x06\x01B\x17\x01p}\x01j\x01\0\x01s\x01\
+@\x01\x04paths\0\x01\x04\0\x09read-file\x01\x02\x01j\0\x01s\x01@\x02\x04paths\x07\
+contents\0\x03\x04\0\x0awrite-file\x01\x04\x01ps\x01j\x01\x05\x01s\x01@\x01\x04p\
+aths\0\x06\x04\0\x0alist-files\x01\x07\x01@\x01\x04paths\0\x03\x04\0\x0bdelete-f\
+ile\x01\x08\x04\0\x0acreate-dir\x01\x08\x04\0\x0adelete-dir\x01\x08\x01j\x01\x7f\
+\x01s\x01@\x01\x04paths\0\x09\x04\0\x0bpath-exists\x01\x0a\x01j\x01s\x01s\x01@\x03\
+\x03dirs\x07commands\x04args\x05\0\x0b\x04\0\x0fexecute-command\x01\x0c\x01@\x02\
+\x03dirs\x07commands\0\x0b\x04\0\x13execute-nix-command\x01\x0d\x03\0\x17ntwk:th\
+eater/filesystem\x05\x07\x01B(\x01r\x01\x04hashs\x04\0\x0bcontent-ref\x03\0\0\x01\
+j\x01s\x01s\x01@\0\0\x02\x04\0\x03new\x01\x03\x01p}\x01j\x01\x01\x01s\x01@\x02\x08\
+store-ids\x07content\x04\0\x05\x04\0\x05store\x01\x06\x01j\x01\x04\x01s\x01@\x02\
+\x08store-ids\x0bcontent-ref\x01\0\x07\x04\0\x03get\x01\x08\x01j\x01\x7f\x01s\x01\
+@\x02\x08store-ids\x0bcontent-ref\x01\0\x09\x04\0\x06exists\x01\x0a\x01j\0\x01s\x01\
+@\x03\x08store-ids\x05labels\x0bcontent-ref\x01\0\x0b\x04\0\x05label\x01\x0c\x01\
+k\x01\x01j\x01\x0d\x01s\x01@\x02\x08store-ids\x05labels\0\x0e\x04\0\x0cget-by-la\
+bel\x01\x0f\x01@\x02\x08store-ids\x05labels\0\x0b\x04\0\x0cremove-label\x01\x10\x04\
+\0\x11remove-from-label\x01\x0c\x01@\x03\x08store-ids\x05labels\x07content\x04\0\
+\x05\x04\0\x0estore-at-label\x01\x11\x04\0\x18replace-content-at-label\x01\x11\x04\
+\0\x10replace-at-label\x01\x0c\x01ps\x01j\x01\x12\x01s\x01@\x01\x08store-ids\0\x13\
+\x04\0\x0blist-labels\x01\x14\x01p\x01\x01j\x01\x15\x01s\x01@\x01\x08store-ids\0\
+\x16\x04\0\x10list-all-content\x01\x17\x01j\x01w\x01s\x01@\x01\x08store-ids\0\x18\
+\x04\0\x14calculate-total-size\x01\x19\x03\0\x12ntwk:theater/store\x05\x08\x02\x03\
+\0\0\x05event\x02\x03\0\0\x0echannel-accept\x01B\x1d\x02\x03\x02\x01\x01\x04\0\x04\
+json\x03\0\0\x02\x03\x02\x01\x09\x04\0\x05event\x03\0\x02\x02\x03\x02\x01\x05\x04\
+\0\x0achannel-id\x03\0\x04\x02\x03\x02\x01\x0a\x04\0\x0echannel-accept\x03\0\x06\
+\x01k\x01\x01o\x01\x01\x01o\x01\x08\x01j\x01\x0a\x01s\x01@\x02\x05state\x08\x06p\
+arams\x09\0\x0b\x04\0\x0bhandle-send\x01\x0c\x01o\x02\x08\x09\x01j\x01\x0d\x01s\x01\
+@\x02\x05state\x08\x06params\x09\0\x0e\x04\0\x0ehandle-request\x01\x0f\x01o\x01\x07\
+\x01o\x02\x08\x10\x01j\x01\x11\x01s\x01@\x02\x05state\x08\x06params\x09\0\x12\x04\
+\0\x13handle-channel-open\x01\x13\x01o\x02\x05\x01\x01@\x02\x05state\x08\x06para\
+ms\x14\0\x0b\x04\0\x16handle-channel-message\x01\x15\x01o\x01\x05\x01@\x02\x05st\
+ate\x08\x06params\x16\0\x0b\x04\0\x14handle-channel-close\x01\x17\x04\0\"ntwk:th\
+eater/message-server-client\x05\x0b\x02\x03\0\0\x05state\x01B\x07\x02\x03\x02\x01\
+\x0c\x04\0\x05state\x03\0\0\x01o\x01s\x01o\x01\x01\x01j\x01\x03\x01s\x01@\x02\x05\
+state\x01\x06params\x02\0\x04\x04\0\x04init\x01\x05\x04\0\x12ntwk:theater/actor\x05\
+\x0d\x04\0\x1fntwk:theater/runtime-content-fs\x04\0\x0b\x18\x01\0\x12runtime-con\
 tent-fs\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.22\
 0.1\x10wit-bindgen-rust\x060.36.0";
 #[inline(never)]
