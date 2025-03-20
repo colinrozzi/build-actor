@@ -7,7 +7,7 @@ use bindings::ntwk::theater::message_server_host;
 use bindings::ntwk::theater::message_server_host::send;
 use bindings::ntwk::theater::runtime::log;
 use bindings::ntwk::theater::store::{self, ContentRef};
-use bindings::ntwk::theater::types::{self, Json, ChannelId};
+use bindings::ntwk::theater::types::{self, ChannelId, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -100,7 +100,6 @@ impl BuildState {
             let event = json!({
                 "event_type": event_type,
                 "source": "build-actor",
-                "timestamp": chrono::Utc::now().timestamp_millis(),
                 "sequence": self.event_sequence,
                 "operation_id": operation_id,
                 "content": content
@@ -182,7 +181,6 @@ impl MessageServerClient for Component {
                 let response = json!({
                     "event_type": "operation.acknowledged",
                     "source": "build-actor",
-                    "timestamp": chrono::Utc::now().timestamp_millis(),
                     "sequence": state.event_sequence,
                     "operation_id": operation_id,
                     "content": {
@@ -196,19 +194,25 @@ impl MessageServerClient for Component {
                 let response_bytes = serde_json::to_vec(&response).map_err(|e| e.to_string())?;
                 let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
 
-                return Ok((Some(updated_state), types::ChannelAccept {
-                    accepted: true,
-                    message: Some(response_bytes),
-                }));
+                return Ok((
+                    Some(updated_state),
+                    types::ChannelAccept {
+                        accepted: true,
+                        message: Some(response_bytes),
+                    },
+                ));
             }
         }
 
         // Reject other channel types
         let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
-        Ok((Some(updated_state), types::ChannelAccept {
-            accepted: false,
-            message: None,
-        }))
+        Ok((
+            Some(updated_state),
+            types::ChannelAccept {
+                accepted: false,
+                message: None,
+            },
+        ))
     }
 
     /// Handle channel message
@@ -217,15 +221,18 @@ impl MessageServerClient for Component {
         channel_id: ChannelId,
         msg: Json,
     ) -> Result<(Option<Json>,), String> {
-        log(&format!("Build actor: Received message on channel {}", channel_id));
-        
+        log(&format!(
+            "Build actor: Received message on channel {}",
+            channel_id
+        ));
+
         // Parse state
         let mut state: BuildState = match state_bytes {
             Some(bytes) => serde_json::from_slice(&bytes)
                 .map_err(|e| format!("Failed to parse state: {}", e))?,
             None => return Ok((None,)),
         };
-        
+
         // Store the channel ID
         state.active_channel = Some(channel_id.clone());
 
@@ -319,7 +326,7 @@ impl MessageServerClient for Component {
         channel_id: ChannelId,
     ) -> Result<(Option<Json>,), String> {
         log(&format!("Build actor: Channel {} closed", channel_id));
-        
+
         // Parse state
         let mut state: BuildState = match state_bytes {
             Some(bytes) => serde_json::from_slice(&bytes)

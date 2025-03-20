@@ -20,6 +20,10 @@
 5. Fixed pattern matching on channel message parameters
    - Removed tuple destructuring from channel handlers
 
+6. Removed timestamp fields from events
+   - WebAssembly doesn't have access to system time functions
+   - Removed chrono dependency references from the code
+
 ## Testing
 
 The implementation should now compile and enable channel-based streaming that:
