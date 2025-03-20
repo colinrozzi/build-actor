@@ -409,7 +409,7 @@ fn list_directory(
 
         for (name, hash) in entries {
             // Get the child node to determine its type
-            let child_node = get_node(store_id, &hash)?;
+            let child_node = get_node(&hash, store_id)?;
 
             let entry_type = match child_node.node_type {
                 NodeType::File => "file",
@@ -441,7 +441,7 @@ fn list_directory(
         let entries = current_node.entries.unwrap();
         if let Some(hash) = entries.get(component) {
             current_hash = hash.clone();
-            current_node = get_node(store_id, hash)?;
+            current_node = get_node(hash, store_id)?;
         } else {
             return Err(format!("Path component not found: {}", component));
         }
@@ -458,7 +458,7 @@ fn list_directory(
 
     for (name, hash) in entries {
         // Get the child node to determine its type
-        let child_node = get_node(store_id, &hash)?;
+        let child_node = get_node(&hash, store_id)?;
 
         let entry_type = match child_node.node_type {
             NodeType::File => "file",
