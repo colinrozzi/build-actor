@@ -35,6 +35,11 @@ struct BuildState {
 
     // Build output information
     build_output: Option<BuildOutput>,
+    
+    // New fields for streaming
+    active_channel: Option<String>,
+    operation_id: Option<String>,
+    event_sequence: u32,
 }
 
 /// Status of the build process
@@ -86,6 +91,32 @@ struct DirectoryEntry {
     path: String,
 }
 
+/// BuildState implementation
+impl BuildState {
+    // Stream an event on the active channel
+    fn stream_event(&mut self, event_type: &str, content: serde_json::Value) -> Result<(), String> {
+        if let (Some(channel_id), Some(operation_id)) = (&self.active_channel, &self.operation_id) {
+            let event = json!({{
+                "event_type": event_type,
+                "source": "build-actor",
+                "timestamp": chrono::Utc::now().timestamp_millis(),
+                "sequence": self.event_sequence,
+                "operation_id": operation_id,
+                "content": content
+            }});
+            
+            self.event_sequence += 1;
+            
+            let event_bytes = serde_json::to_vec(&event).map_err(|e| e.to_string())?;
+            
+            message_server_host::send_on_channel(channel_id, &event_bytes)
+                .map_err(|e| format!("Failed to send event: {}", e))?
+        }
+        
+        Ok(())
+    }
+}
+
 /// Main component implementation
 struct Component;
 
@@ -103,6 +134,185 @@ impl MessageServerClient for Component {
     fn handle_send(state: Option<Json>, _params: (Json,)) -> Result<(Option<Json>,), String> {
         // Return state unchanged
         Ok((state,))
+    }
+    
+    /// Handle channel open request
+    fn handle_channel_open(
+        state_bytes: Option<Json>,
+        params: (Json,),
+    ) -> Result<(Option<Json>, (bool, Option<Json>)), String> {
+        log("Build actor: Channel open request received");
+        
+        // Parse state
+        let mut state: BuildState = match state_bytes {
+            Some(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| format!("Failed to parse state: {}", e))?,
+            None => BuildState {
+                store_id: String::new(),
+                build_store_id: String::new(),
+                fs_hash: String::new(),
+                status: BuildStatus::NotStarted,
+                build_output: None,
+                active_channel: None,
+                operation_id: None,
+                event_sequence: 0,
+            },
+        };
+        
+        // Parse the initial message
+        let event: serde_json::Value = serde_json::from_slice(&params.0)
+            .map_err(|e| format!("Failed to parse channel open message: {}", e))?;
+        
+        // Check if this is a build request channel
+        if let Some(event_type) = event.get("event_type").and_then(|v| v.as_str()) {
+            if event_type == "operation.started" {
+                // Extract operation ID
+                let operation_id = event.get("operation_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing operation_id in channel open request")?
+                    .to_string();
+                
+                // Accept the channel
+                state.operation_id = Some(operation_id.clone());
+                state.event_sequence = 0;
+                
+                // Prepare an acknowledgment response
+                let response = json!({
+                    "event_type": "operation.acknowledged",
+                    "source": "build-actor",
+                    "timestamp": chrono::Utc::now().timestamp_millis(),
+                    "sequence": state.event_sequence,
+                    "operation_id": operation_id,
+                    "content": {
+                        "status": "ready",
+                        "message": "Build actor ready to process build request"
+                    }
+                });
+                
+                state.event_sequence += 1;
+                
+                let response_bytes = serde_json::to_vec(&response).map_err(|e| e.to_string())?;
+                let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
+                
+                return Ok((Some(updated_state), (true, Some(response_bytes))));
+            }
+        }
+        
+        // Reject other channel types
+        let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
+        Ok((Some(updated_state), (false, None)))
+    }
+    
+    /// Handle channel message
+    fn handle_channel_message(
+        state_bytes: Option<Json>,
+        params: (String, Json),
+    ) -> Result<(Option<Json>,), String> {
+        let (channel_id, msg) = params;
+        log(&format!("Build actor: Received message on channel {}", channel_id));
+        
+        // Parse state
+        let mut state: BuildState = match state_bytes {
+            Some(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| format!("Failed to parse state: {}", e))?,
+            None => return Ok((None,)),
+        };
+        
+        // Store the channel ID
+        state.active_channel = Some(channel_id.clone());
+        
+        // Parse the message
+        let event: serde_json::Value = serde_json::from_slice(&msg)
+            .map_err(|e| format!("Failed to parse channel message: {}", e))?;
+        
+        // Handle build request
+        if let Some(event_type) = event.get("event_type").and_then(|v| v.as_str()) {
+            if event_type == "build.request" {
+                // Extract build parameters from the content
+                let content = event.get("content").ok_or("Missing content in build request")?;
+                
+                // Extract required fields
+                let fs_hash = content.get("fs_hash")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing fs_hash in build request")?;
+                    
+                let store_id = content.get("store_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing store_id in build request")?;
+                    
+                let build_store_id = content.get("build_store_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing build_store_id in build request")?;
+                
+                // Update state with build parameters
+                state.fs_hash = fs_hash.to_string();
+                state.store_id = store_id.to_string();
+                state.build_store_id = build_store_id.to_string();
+                state.status = BuildStatus::NotStarted;
+                
+                // Start the build process
+                if let Err(e) = state.stream_event("build.started", json!({
+                    "message": "Build process starting",
+                    "fs_hash": fs_hash
+                })) {
+                    log(&format!("Failed to stream event: {}", e));
+                }
+                
+                // Start the build process
+                let build_output = start_build_with_streaming(&mut state);
+                
+                // Update state with build result
+                state.build_output = Some(build_output.clone());
+                state.status = if build_output.success {
+                    BuildStatus::Completed
+                } else {
+                    BuildStatus::Failed
+                };
+                
+                // Stream final event
+                let status = if build_output.success { "success" } else { "failed" };
+                if let Err(e) = state.stream_event("operation.completed", json!({
+                    "message": format!("Build operation {}", status),
+                    "success": build_output.success,
+                    "error": build_output.error
+                })) {
+                    log(&format!("Failed to stream event: {}", e));
+                }
+                
+                // Close the channel
+                if let Err(e) = message_server_host::close_channel(&channel_id) {
+                    log(&format!("Failed to close channel: {}", e));
+                }
+            }
+        }
+        
+        let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
+        Ok((Some(updated_state),))
+    }
+    
+    /// Handle channel close
+    fn handle_channel_close(
+        state_bytes: Option<Json>,
+        params: (String,),
+    ) -> Result<(Option<Json>,), String> {
+        let (channel_id,) = params;
+        log(&format!("Build actor: Channel {} closed", channel_id));
+        
+        // Parse state
+        let mut state: BuildState = match state_bytes {
+            Some(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| format!("Failed to parse state: {}", e))?,
+            None => return Ok((None,)),
+        };
+        
+        // Clear the active channel if it matches
+        if state.active_channel.as_ref().map_or(false, |ac| ac == &channel_id) {
+            state.active_channel = None;
+            state.operation_id = None;
+        }
+        
+        let updated_state = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
+        Ok((Some(updated_state),))
     }
 
     /// Handle request messages
@@ -322,6 +532,137 @@ fn process_directory(
                     }
                 }
                 Err(e) => {
+                    log(&format!("Failed to read file {}: {}", entry_path, e));
+                    return Err(format!("Failed to read file {}: {}", entry_path, e));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Process directory with streaming events
+fn process_directory_with_streaming(
+    fs_hash: &str,
+    path: &str,
+    entries: &[DirectoryEntry],
+    store_id: &str,
+    state: &mut BuildState,
+) -> Result<(), String> {
+    for entry in entries {
+        let entry_path = if path == "/" {
+            format!("/{}", entry.name)
+        } else {
+            format!("{}/{}", path, entry.name)
+        };
+
+        log(&format!("Processing entry: {}", entry_path));
+        
+        // Stream file processing event
+        if let Err(e) = state.stream_event("output.log", json!({
+            "message": format!("Processing {}: {}", 
+                if entry.entry_type == "directory" { "directory" } else { "file" }, 
+                entry_path)
+        })) {
+            log(&format!("Failed to stream event: {}", e));
+        }
+
+        if entry.entry_type == "directory" {
+            // Stream directory creation event
+            if let Err(e) = state.stream_event("build.creating_directory", json!({
+                "path": entry_path
+            })) {
+                log(&format!("Failed to stream event: {}", e));
+            }
+            
+            // Create directory
+            if let Err(e) = filesystem::create_dir(&format!(".{}", entry_path)) {
+                // Stream error event
+                if let Err(stream_err) = state.stream_event("build.error", json!({
+                    "message": format!("Failed to create directory {}: {}", entry_path, e),
+                    "path": entry_path,
+                    "error": e
+                })) {
+                    log(&format!("Failed to stream event: {}", stream_err));
+                }
+                
+                log(&format!("Failed to create directory {}: {}", entry_path, e));
+                return Err(format!("Failed to create directory {}: {}", entry_path, e));
+            }
+
+            // List directory contents
+            match list_directory(fs_hash, &entry_path, store_id) {
+                Ok(sub_entries) => {
+                    // Stream subdirectory info
+                    if let Err(e) = state.stream_event("output.log", json!({
+                        "message": format!("Found {} entries in {}", sub_entries.len(), entry_path)
+                    })) {
+                        log(&format!("Failed to stream event: {}", e));
+                    }
+                    
+                    // Process subdirectory with streaming
+                    if let Err(e) = process_directory_with_streaming(fs_hash, &entry_path, &sub_entries, store_id, state) {
+                        return Err(e);
+                    }
+                }
+                Err(e) => {
+                    // Stream error event
+                    if let Err(stream_err) = state.stream_event("build.error", json!({
+                        "message": format!("Failed to list directory {}: {}", entry_path, e),
+                        "path": entry_path,
+                        "error": e
+                    })) {
+                        log(&format!("Failed to stream event: {}", stream_err));
+                    }
+                    
+                    log(&format!("Failed to list directory {}: {}", entry_path, e));
+                    return Err(format!("Failed to list directory {}: {}", entry_path, e));
+                }
+            }
+        } else {
+            // Stream file extraction event
+            if let Err(e) = state.stream_event("build.extracting_file", json!({
+                "path": entry_path
+            })) {
+                log(&format!("Failed to stream event: {}", e));
+            }
+            
+            // Read file content
+            match read_file(fs_hash, &entry_path, store_id) {
+                Ok(content) => {
+                    // Stream file size info
+                    if let Err(e) = state.stream_event("output.log", json!({
+                        "message": format!("Extracted file: {} ({} bytes)", entry_path, content.len())
+                    })) {
+                        log(&format!("Failed to stream event: {}", e));
+                    }
+                    
+                    // Write file to local filesystem
+                    if let Err(e) = filesystem::write_file(&format!(".{}", entry_path), &content) {
+                        // Stream error event
+                        if let Err(stream_err) = state.stream_event("build.error", json!({
+                            "message": format!("Failed to write file {}: {}", entry_path, e),
+                            "path": entry_path,
+                            "error": e
+                        })) {
+                            log(&format!("Failed to stream event: {}", stream_err));
+                        }
+                        
+                        log(&format!("Failed to write file {}: {}", entry_path, e));
+                        return Err(format!("Failed to write file {}: {}", entry_path, e));
+                    }
+                }
+                Err(e) => {
+                    // Stream error event
+                    if let Err(stream_err) = state.stream_event("build.error", json!({
+                        "message": format!("Failed to read file {}: {}", entry_path, e),
+                        "path": entry_path,
+                        "error": e
+                    })) {
+                        log(&format!("Failed to stream event: {}", stream_err));
+                    }
+                    
                     log(&format!("Failed to read file {}: {}", entry_path, e));
                     return Err(format!("Failed to read file {}: {}", entry_path, e));
                 }
@@ -640,6 +981,62 @@ fn execute_build(build_store_id: &str) -> Result<BuildOutput, String> {
                 }
                 Err(e) => {
                     log(&format!("Failed to list target directory: {}", e));
+                    
+                    // Stream error event
+                    if let Err(stream_err) = state.stream_event("build.error", json!({
+                        "message": format!("Failed to list target directory: {}", e),
+                        "error": e
+                    })) {
+                        log(&format!("Failed to stream event: {}", stream_err));
+                    }
+
+                    // Create build output with error
+                    let build_output = BuildOutput {
+                        success: false,
+                        stdout,
+                        stderr,
+                        wasm_path: None,
+                        wasm_hash: None,
+                        build_logs: vec!["Failed to list target directory".to_string()],
+                        error: Some(format!("Failed to list target directory: {}", e)),
+                    };
+
+                    Ok(build_output)
+                }
+            }
+        }
+        Err(e) => {
+            log(&format!("Failed to execute build command: {}", e));
+            
+            // Stream error event
+            if let Err(stream_err) = state.stream_event("build.failed", json!({
+                "message": format!("Failed to execute build command: {}", e),
+                "error": e
+            })) {
+                log(&format!("Failed to stream event: {}", stream_err));
+            }
+
+            // Create build output with error
+            let build_output = BuildOutput {
+                success: false,
+                stdout: String::new(),
+                stderr: format!("Failed to execute build command: {}", e),
+                wasm_path: None,
+                wasm_hash: None,
+                build_logs: vec!["Build command failed".to_string()],
+                error: Some(format!("Failed to execute build command: {}", e)),
+            };
+
+            Ok(build_output)
+        }
+    }"No WASM file found".to_string()),
+                        };
+
+                        Ok(build_output)
+                    }
+                }
+                Err(e) => {
+                    log(&format!("Failed to list target directory: {}", e));
 
                     // Create build output with error
                     let build_output = BuildOutput {
@@ -671,6 +1068,179 @@ fn execute_build(build_store_id: &str) -> Result<BuildOutput, String> {
             };
 
             Ok(build_output)
+        }
+    }
+}
+
+/// New function to start build with streaming
+fn start_build_with_streaming(state: &mut BuildState) -> BuildOutput {
+    log("Starting build process with streaming");
+    
+    // First update state to reflect that we're starting extraction
+    let mut updated_state = state.clone();
+    updated_state.status = BuildStatus::Extracting;
+    
+    // Stream extracting event
+    if let Err(e) = state.stream_event("build.extracting", json!({
+        "message": "Extracting code from content store"
+    })) {
+        log(&format!("Failed to stream event: {}", e));
+    }
+    
+    // Begin extracting files from virtual filesystem
+    let fs_hash = &state.fs_hash;
+
+    // Directory listing from root
+    match list_directory(fs_hash, "/", &state.store_id) {
+        Ok(entries) => {
+            log(&format!("Found {} entries at root", entries.len()));
+            
+            // Stream root directory info
+            if let Err(e) = state.stream_event("output.log", json!({
+                "message": format!("Found {} entries at root", entries.len())
+            })) {
+                log(&format!("Failed to stream event: {}", e));
+            }
+
+            // Process entries recursively with streaming
+            match process_directory_with_streaming(fs_hash, "/", &entries, &state.store_id, state) {
+                Ok(_) => {
+                    log("Successfully extracted all files from virtual filesystem");
+                    
+                    // Stream extraction complete event
+                    if let Err(e) = state.stream_event("build.extraction_complete", json!({
+                        "message": "Successfully extracted all files from virtual filesystem"
+                    })) {
+                        log(&format!("Failed to stream event: {}", e));
+                    }
+
+                    // Update state to reflect we're now building
+                    let mut building_state = updated_state.clone();
+                    building_state.status = BuildStatus::Building;
+                    
+                    // Stream build starting event
+                    if let Err(e) = state.stream_event("build.environment_setup", json!({
+                        "message": "Setting up build environment"
+                    })) {
+                        log(&format!("Failed to stream event: {}", e));
+                    }
+
+                    // Start the build process with streaming
+                    match execute_build_with_streaming(&state.build_store_id, state) {
+                        Ok(build_output) => {
+                            log(&format!(
+                                "Build completed with success={}",
+                                build_output.success
+                            ));
+                            
+                            // Stream build completed event
+                            let status_msg = if build_output.success {
+                                "Build completed successfully"
+                            } else {
+                                "Build failed"
+                            };
+                            
+                            if let Err(e) = state.stream_event(
+                                if build_output.success { "build.completed" } else { "build.failed" },
+                                json!({
+                                    "message": status_msg,
+                                    "wasm_path": build_output.wasm_path,
+                                    "success": build_output.success
+                                })
+                            ) {
+                                log(&format!("Failed to stream event: {}", e));
+                            }
+
+                            // Update state with build output
+                            let mut final_state = building_state.clone();
+                            final_state.build_output = Some(build_output.clone());
+                            final_state.status = if build_output.success {
+                                BuildStatus::Completed
+                            } else {
+                                BuildStatus::Failed
+                            };
+
+                            build_output
+                        }
+                        Err(e) => {
+                            log(&format!("Build failed: {}", e));
+                            
+                            // Stream build failed event
+                            if let Err(stream_err) = state.stream_event("build.failed", json!({
+                                "message": format!("Build failed: {}", e),
+                                "error": e
+                            })) {
+                                log(&format!("Failed to stream event: {}", stream_err));
+                            }
+
+                            // Update state to reflect failure
+                            let mut failed_state = building_state.clone();
+                            failed_state.status = BuildStatus::Failed;
+                            failed_state.build_output = Some(BuildOutput {
+                                success: false,
+                                stdout: String::new(),
+                                stderr: String::new(),
+                                wasm_path: None,
+                                wasm_hash: None,
+                                build_logs: vec![],
+                                error: Some(e.clone()),
+                            });
+
+                            BuildOutput {
+                                success: false,
+                                stdout: String::new(),
+                                stderr: String::new(),
+                                wasm_path: None,
+                                wasm_hash: None,
+                                build_logs: vec![],
+                                error: Some(e),
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    log(&format!("Failed to process directories: {}", e));
+                    
+                    // Stream error event
+                    if let Err(stream_err) = state.stream_event("build.extraction_failed", json!({
+                        "message": format!("Failed to process directories: {}", e),
+                        "error": e
+                    })) {
+                        log(&format!("Failed to stream event: {}", stream_err));
+                    }
+                    
+                    BuildOutput {
+                        success: false,
+                        stdout: String::new(),
+                        stderr: String::new(),
+                        wasm_path: None,
+                        wasm_hash: None,
+                        build_logs: vec![],
+                        error: Some(e),
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            log(&format!("Failed to list root directory: {}", e));
+            
+            // Stream error event
+            if let Err(stream_err) = state.stream_event("build.extraction_failed", json!({
+                "message": format!("Failed to list root directory: {}", e),
+                "error": e
+            })) {
+                log(&format!("Failed to stream event: {}", stream_err));
+            }
+            
+            BuildOutput {
+                success: false,
+                stdout: String::new(),
+                stderr: String::new(),
+                wasm_path: None,
+                wasm_hash: None,
+                build_logs: vec![],
+                error: Some(e),
+            }
         }
     }
 }
