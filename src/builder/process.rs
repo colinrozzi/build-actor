@@ -24,6 +24,10 @@ impl BuildProcess {
     /// Function to start the build process
     /// Send a message update through the channel if one is configured
     fn send_update(&self, message: BuildMessage) -> Result<(), String> {
+        log(&format!(
+            "Sending update: {:?} to {:?}",
+            message, self.state.channel_id
+        ));
         if let Some(channel_id) = &self.state.channel_id {
             let message_json = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
             send_on_channel(channel_id, &message_json).map_err(|e| e.to_string())?;
