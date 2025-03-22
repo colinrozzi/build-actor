@@ -1,21 +1,25 @@
 #[cfg(test)]
 mod tests {
-    use crate::state::{BuildState, BuildStatus};
-    use crate::filesystem::ContentStore;
     use crate::builder::process::BuildProcess;
+    use crate::filesystem::ContentStore;
+    use crate::state::{BuildState, BuildStatus};
 
     #[test]
     fn test_build_state() {
-        let state = BuildState::new("test-store".to_string(), "test-hash".to_string());
+        let state = BuildState::new(
+            "test-store".to_string(),
+            "test-hash".to_string(),
+            "test-build-store".to_string(),
+        );
         assert_eq!(state.store_id, "test-store");
         assert_eq!(state.fs_hash, "test-hash");
-        
+
         // Check initial status
         match state.status {
             BuildStatus::NotStarted => (),
             _ => panic!("Initial status should be NotStarted"),
         }
-        
+
         // Check build output is initially None
         assert!(state.build_output.is_none());
     }

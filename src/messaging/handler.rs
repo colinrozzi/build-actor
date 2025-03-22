@@ -26,42 +26,10 @@ impl MessageHandler {
     /// Handle request messages
     pub fn handle_request(
         state_bytes: Option<Json>,
-        params: (Json,),
+        _params: (Json,),
     ) -> Result<(Option<Json>, (Json,)), String> {
         log("build-actor: Received request");
-        let req = params.0;
-        match serde_json::from_slice::<Value>(&req) {
-            Ok(config) => {
-                // Extract required parameters
-                let fs_hash = match config.get("fs_hash").and_then(|v| v.as_str()) {
-                    Some(hash) => hash.to_string(),
-                    None => return Err("Missing required parameter 'fs_hash'".to_string()),
-                };
-
-                let store_id = match config.get("store_id").and_then(|v| v.as_str()) {
-                    Some(id) => id.to_string(),
-                    None => return Err("Missing required parameter 'store_id'".to_string()),
-                };
-
-                // Create initial state
-                let state = BuildState::new(store_id, fs_hash);
-
-                // Start the build process
-                let mut build_process = BuildProcess::new(state);
-                let result = build_process.start();
-
-                // Serialize the state
-                let updated_state = build_process.state();
-                match serde_json::to_vec(updated_state) {
-                    Ok(state_bytes) => {
-                        log("build-actor: Build process completed");
-                        Ok((Some(state_bytes), (serde_json::to_vec(&result).unwrap(),)))
-                    }
-                    Err(e) => Err(format!("Failed to serialize state: {}", e)),
-                }
-            }
-            Err(e) => Err(format!("Failed to parse initialization data: {}", e)),
-        }
+        Ok((state_bytes, (vec![],)))
     }
 
     /// Handle channel open
@@ -129,8 +97,17 @@ impl MessageHandler {
                     None => return Err("Missing 'store_id' parameter".to_string()),
                 };
 
+                let build_store_id = match message.get("build_store_id").and_then(|v| v.as_str()) {
+                    Some(id) => id,
+                    None => return Err("Missing 'build_store_id' parameter".to_string()),
+                };
+
                 // Create a new BuildState with the provided parameters
-                let mut build_state = BuildState::new(store_id.to_string(), fs_hash.to_string());
+                let mut build_state = BuildState::new(
+                    store_id.to_string(),
+                    fs_hash.to_string(),
+                    build_store_id.to_string(),
+                );
 
                 // Store the channel ID for sending progress updates
                 build_state.channel_id = Some(channel_id.clone());
@@ -145,13 +122,6 @@ impl MessageHandler {
                     Ok(bytes) => bytes,
                     Err(e) => return Err(format!("Failed to serialize state: {}", e)),
                 };
-
-                // Send the result of the build process over the channel
-                if let Ok(result_bytes) = serde_json::to_vec(&result) {
-                    if let Err(e) = send_on_channel(&channel_id, &result_bytes) {
-                        log(&format!("Failed to send result message: {}", e));
-                    }
-                }
 
                 Ok((Some(updated_state_bytes),))
             }

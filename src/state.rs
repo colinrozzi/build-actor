@@ -16,6 +16,9 @@ pub struct BuildState {
 
     // Channel ID for sending progress updates
     pub channel_id: Option<String>,
+
+    // Store ID for the build output
+    pub build_store_id: String,
 }
 
 /// Status of the build process
@@ -41,13 +44,14 @@ pub struct BuildOutput {
 }
 
 impl BuildState {
-    pub fn new(store_id: String, fs_hash: String) -> Self {
+    pub fn new(store_id: String, fs_hash: String, build_store_id: String) -> Self {
         Self {
             store_id,
             fs_hash,
             status: BuildStatus::NotStarted,
             build_output: None,
             channel_id: None,
+            build_store_id,
         }
     }
 

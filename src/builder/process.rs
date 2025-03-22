@@ -1,5 +1,6 @@
 use crate::bindings::ntwk::theater::message_server_host::send_on_channel;
 use crate::bindings::ntwk::theater::runtime::log;
+use crate::bindings::ntwk::theater::store::store_at_label;
 use crate::builder::output::BuildResultSender;
 use crate::filesystem::ContentStore;
 use crate::messaging::messages::{BuildMessage, LogLevel};
@@ -270,6 +271,10 @@ impl BuildProcess {
                                 Ok(wasm_bytes) => {
                                     // Calculate hash (basic string hash for now)
                                     let wasm_hash = format!("wasm-{}", wasm_bytes.len());
+
+                                    // Write the wasm bytes to the store
+                                    store_at_label(&self.state.build_store_id, "wasm", &wasm_bytes)
+                                        .expect("Failed to store wasm");
 
                                     // Create build output
                                     let build_output = BuildOutput {
