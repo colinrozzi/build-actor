@@ -133,7 +133,7 @@ impl MessageHandler {
                 let mut build_state = BuildState::new(store_id.to_string(), fs_hash.to_string());
 
                 // Store the channel ID for sending progress updates
-                build_state.channel_id = Some(channel_id);
+                build_state.channel_id = Some(channel_id.clone());
 
                 // Create build process and start it
                 let mut build_process = BuildProcess::new(build_state);
@@ -145,6 +145,13 @@ impl MessageHandler {
                     Ok(bytes) => bytes,
                     Err(e) => return Err(format!("Failed to serialize state: {}", e)),
                 };
+
+                // Send the result of the build process over the channel
+                if let Ok(result_bytes) = serde_json::to_vec(&result) {
+                    if let Err(e) = send_on_channel(&channel_id, &result_bytes) {
+                        log(&format!("Failed to send result message: {}", e));
+                    }
+                }
 
                 Ok((Some(updated_state_bytes),))
             }
