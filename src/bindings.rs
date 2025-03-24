@@ -499,7 +499,7 @@ pub mod ntwk {
             pub struct CommandSuccess {
                 pub stdout: _rt::String,
                 pub stderr: _rt::String,
-                pub exit_code: u32,
+                pub exit_code: i32,
             }
             impl ::core::fmt::Debug for CommandSuccess {
                 fn fmt(
@@ -1018,7 +1018,7 @@ pub mod ntwk {
                                             CommandSuccess {
                                                 stdout: _rt::string_lift(bytes9),
                                                 stderr: _rt::string_lift(bytes12),
-                                                exit_code: l13 as u32,
+                                                exit_code: l13,
                                             }
                                         };
                                         CommandResult::Success(e17)
@@ -1130,7 +1130,7 @@ pub mod ntwk {
                                             CommandSuccess {
                                                 stdout: _rt::string_lift(bytes7),
                                                 stderr: _rt::string_lift(bytes10),
-                                                exit_code: l11 as u32,
+                                                exit_code: l11,
                                             }
                                         };
                                         CommandResult::Success(e15)
@@ -3018,7 +3018,7 @@ j\x01\x01\x01s\x01@\x02\x08actor-id\x03\x03msg\x01\0\x08\x04\0\x07request\x01\x0
 en-channel\x01\x0b\x01@\x02\x0achannel-id\x05\x03msg\x01\0\x06\x04\0\x0fsend-on-\
 channel\x01\x0c\x01@\x01\x0achannel-id\x05\0\x06\x04\0\x0dclose-channel\x01\x0d\x03\
 \0\x20ntwk:theater/message-server-host\x05\x06\x01B\x1d\x01r\x03\x06stdouts\x06s\
-tderrs\x09exit-codey\x04\0\x0fcommand-success\x03\0\0\x01r\x01\x07messages\x04\0\
+tderrs\x09exit-codez\x04\0\x0fcommand-success\x03\0\0\x01r\x01\x07messages\x04\0\
 \x0dcommand-error\x03\0\x02\x01q\x02\x07success\x01\x01\0\x05error\x01\x03\0\x04\
 \0\x0ecommand-result\x03\0\x04\x01p}\x01j\x01\x06\x01s\x01@\x01\x04paths\0\x07\x04\
 \0\x09read-file\x01\x08\x01j\0\x01s\x01@\x02\x04paths\x07contents\0\x09\x04\0\x0a\
