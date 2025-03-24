@@ -7,6 +7,8 @@ use crate::messaging::messages::{BuildMessage, LogLevel};
 use crate::state::{BuildOutput, BuildState, BuildStatus};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::bindings::ntwk::theater::filesystem::CommandResult;
+
 /// Structure to manage the build process
 pub struct BuildProcess {
     state: BuildState,
@@ -213,134 +215,175 @@ impl BuildProcess {
                 "cargo component build --target wasm32-unknown-unknown --release".to_string(),
             ],
         ) {
-            Ok(stdout) => {
-                self.log_message(
-                    LogLevel::Info,
-                    &format!("Build command executed, stdout: {}", stdout),
-                );
+            Ok(command_result) => {
+                match command_result {
+                    CommandResult::Success(result) => {
+                        let stdout = result.stdout;
+                        let stderr = result.stderr;
+                        let exit_code = result.exit_code;
 
-                // Send command output
-                let _ = self.send_update(BuildMessage::CommandOutput {
-                    stdout: stdout.clone(),
-                    stderr: "Stderr not available from host function".to_string(),
-                });
+                        self.log_message(LogLevel::Info, "Build command succeeded");
 
-                // Send progress update
-                let _ = self.send_update(BuildMessage::Progress {
-                    status: BuildStatus::Building,
-                    description: "Build command completed, checking results".to_string(),
-                    percent_complete: Some(80.0),
-                });
-
-                // Capture stderr (not directly available from host function)
-                let stderr = "Stderr not available from host function".to_string();
-
-                // Check if target directory exists
-                let target_dir_path = "target/wasm32-unknown-unknown/release";
-                match crate::bindings::ntwk::theater::filesystem::list_files(target_dir_path) {
-                    Ok(files) => {
                         self.log_message(
                             LogLevel::Info,
-                            &format!("Found {} files in target directory", files.len()),
+                            &format!("Build command executed, stdout: {}", stdout),
                         );
 
-                        // Find .wasm file
-                        let wasm_files: Vec<String> = files
-                            .iter()
-                            .filter(|f| f.ends_with(".wasm"))
-                            .cloned()
-                            .collect();
+                        // Send command output
+                        let _ = self.send_update(BuildMessage::CommandOutput {
+                            stdout: stdout.clone(),
+                            stderr: "Stderr not available from host function".to_string(),
+                        });
 
-                        if let Some(wasm_file) = wasm_files.first() {
-                            let wasm_path = format!("{}/{}", target_dir_path, wasm_file);
-                            self.log_message(
-                                LogLevel::Info,
-                                &format!("Found WASM file at {}", wasm_path),
-                            );
+                        // Send progress update
+                        let _ = self.send_update(BuildMessage::Progress {
+                            status: BuildStatus::Building,
+                            description: "Build command completed, checking results".to_string(),
+                            percent_complete: Some(80.0),
+                        });
 
-                            // Send progress update
-                            let _ = self.send_update(BuildMessage::Progress {
-                                status: BuildStatus::Building,
-                                description: "Found WASM file, calculating hash".to_string(),
-                                percent_complete: Some(90.0),
-                            });
+                        // Capture stderr (not directly available from host function)
+                        let stderr = "Stderr not available from host function".to_string();
 
-                            // Read WASM file to calculate hash
-                            match crate::bindings::ntwk::theater::filesystem::read_file(&wasm_path)
-                            {
-                                Ok(wasm_bytes) => {
-                                    // Calculate hash (basic string hash for now)
-                                    let wasm_hash = format!("wasm-{}", wasm_bytes.len());
+                        // Check if target directory exists
+                        let target_dir_path = "target/wasm32-unknown-unknown/release";
+                        match crate::bindings::ntwk::theater::filesystem::list_files(
+                            target_dir_path,
+                        ) {
+                            Ok(files) => {
+                                self.log_message(
+                                    LogLevel::Info,
+                                    &format!("Found {} files in target directory", files.len()),
+                                );
 
-                                    // Write the wasm bytes to the store
-                                    store_at_label(&self.state.build_store_id, "wasm", &wasm_bytes)
-                                        .expect("Failed to store wasm");
+                                // Find .wasm file
+                                let wasm_files: Vec<String> = files
+                                    .iter()
+                                    .filter(|f| f.ends_with(".wasm"))
+                                    .cloned()
+                                    .collect();
 
-                                    // Create build output
-                                    let build_output = BuildOutput {
-                                        success: true,
-                                        stdout,
-                                        stderr,
-                                        wasm_path: Some(wasm_path),
-                                        wasm_hash: Some(wasm_hash),
-                                        build_logs: vec!["Build completed successfully".to_string()],
-                                        error: None,
-                                    };
-
-                                    Ok(build_output)
-                                }
-                                Err(e) => {
+                                if let Some(wasm_file) = wasm_files.first() {
+                                    let wasm_path = format!("{}/{}", target_dir_path, wasm_file);
                                     self.log_message(
-                                        LogLevel::Error,
-                                        &format!("Failed to read WASM file: {}", e),
+                                        LogLevel::Info,
+                                        &format!("Found WASM file at {}", wasm_path),
                                     );
+
+                                    // Send progress update
+                                    let _ = self.send_update(BuildMessage::Progress {
+                                        status: BuildStatus::Building,
+                                        description: "Found WASM file, calculating hash"
+                                            .to_string(),
+                                        percent_complete: Some(90.0),
+                                    });
+
+                                    // Read WASM file to calculate hash
+                                    match crate::bindings::ntwk::theater::filesystem::read_file(
+                                        &wasm_path,
+                                    ) {
+                                        Ok(wasm_bytes) => {
+                                            // Calculate hash (basic string hash for now)
+                                            let wasm_hash = format!("wasm-{}", wasm_bytes.len());
+
+                                            // Write the wasm bytes to the store
+                                            store_at_label(
+                                                &self.state.build_store_id,
+                                                "wasm",
+                                                &wasm_bytes,
+                                            )
+                                            .expect("Failed to store wasm");
+
+                                            // Create build output
+                                            let build_output = BuildOutput {
+                                                success: true,
+                                                stdout,
+                                                stderr,
+                                                wasm_path: Some(wasm_path),
+                                                wasm_hash: Some(wasm_hash),
+                                                build_logs: vec![
+                                                    "Build completed successfully".to_string()
+                                                ],
+                                                error: None,
+                                            };
+
+                                            Ok(build_output)
+                                        }
+                                        Err(e) => {
+                                            self.log_message(
+                                                LogLevel::Error,
+                                                &format!("Failed to read WASM file: {}", e),
+                                            );
+
+                                            // Create build output with error
+                                            let build_output = BuildOutput {
+                                                success: false,
+                                                stdout,
+                                                stderr,
+                                                wasm_path: Some(wasm_path),
+                                                wasm_hash: None,
+                                                build_logs: vec![
+                                                    "Failed to read WASM file".to_string()
+                                                ],
+                                                error: Some(format!(
+                                                    "Failed to read WASM file: {}",
+                                                    e
+                                                )),
+                                            };
+
+                                            Ok(build_output)
+                                        }
+                                    }
+                                } else {
+                                    self.log_message(LogLevel::Error, "No WASM file found");
 
                                     // Create build output with error
                                     let build_output = BuildOutput {
                                         success: false,
                                         stdout,
                                         stderr,
-                                        wasm_path: Some(wasm_path),
+                                        wasm_path: None,
                                         wasm_hash: None,
-                                        build_logs: vec!["Failed to read WASM file".to_string()],
-                                        error: Some(format!("Failed to read WASM file: {}", e)),
+                                        build_logs: vec!["No WASM file found".to_string()],
+                                        error: Some("No WASM file found".to_string()),
                                     };
 
                                     Ok(build_output)
                                 }
                             }
-                        } else {
-                            self.log_message(LogLevel::Error, "No WASM file found");
+                            Err(e) => {
+                                self.log_message(
+                                    LogLevel::Error,
+                                    &format!("Failed to list target directory: {}", e),
+                                );
 
-                            // Create build output with error
-                            let build_output = BuildOutput {
-                                success: false,
-                                stdout,
-                                stderr,
-                                wasm_path: None,
-                                wasm_hash: None,
-                                build_logs: vec!["No WASM file found".to_string()],
-                                error: Some("No WASM file found".to_string()),
-                            };
+                                // Create build output with error
+                                let build_output = BuildOutput {
+                                    success: false,
+                                    stdout,
+                                    stderr,
+                                    wasm_path: None,
+                                    wasm_hash: None,
+                                    build_logs: vec!["Failed to list target directory".to_string()],
+                                    error: Some(format!("Failed to list target directory: {}", e)),
+                                };
 
-                            Ok(build_output)
+                                Ok(build_output)
+                            }
                         }
                     }
-                    Err(e) => {
-                        self.log_message(
-                            LogLevel::Error,
-                            &format!("Failed to list target directory: {}", e),
-                        );
+                    CommandResult::Error(result) => {
+                        self.log_message(LogLevel::Error, "Build command failed");
 
                         // Create build output with error
                         let build_output = BuildOutput {
                             success: false,
-                            stdout,
-                            stderr,
+                            stdout: "".to_string(),
+                            stderr: "".to_string(),
                             wasm_path: None,
                             wasm_hash: None,
-                            build_logs: vec!["Failed to list target directory".to_string()],
-                            error: Some(format!("Failed to list target directory: {}", e)),
+                            build_logs: vec!["Build command failed".to_string()],
+                            error: Some("Build command failed".to_string()),
                         };
 
                         Ok(build_output)

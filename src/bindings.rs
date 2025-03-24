@@ -494,6 +494,59 @@ pub mod ntwk {
             #[doc(hidden)]
             static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
             use super::super::super::_rt;
+            /// Command Types
+            #[derive(Clone)]
+            pub struct CommandSuccess {
+                pub stdout: _rt::String,
+                pub stderr: _rt::String,
+                pub exit_code: u32,
+            }
+            impl ::core::fmt::Debug for CommandSuccess {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("CommandSuccess")
+                        .field("stdout", &self.stdout)
+                        .field("stderr", &self.stderr)
+                        .field("exit-code", &self.exit_code)
+                        .finish()
+                }
+            }
+            #[derive(Clone)]
+            pub struct CommandError {
+                pub message: _rt::String,
+            }
+            impl ::core::fmt::Debug for CommandError {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("CommandError")
+                        .field("message", &self.message)
+                        .finish()
+                }
+            }
+            #[derive(Clone)]
+            pub enum CommandResult {
+                Success(CommandSuccess),
+                Error(CommandError),
+            }
+            impl ::core::fmt::Debug for CommandResult {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        CommandResult::Success(e) => {
+                            f.debug_tuple("CommandResult::Success").field(e).finish()
+                        }
+                        CommandResult::Error(e) => {
+                            f.debug_tuple("CommandResult::Error").field(e).finish()
+                        }
+                    }
+                }
+            }
             #[allow(unused_unsafe, clippy::all)]
             /// Basic file operations
             pub fn read_file(path: &str) -> Result<_rt::Vec<u8>, _rt::String> {
@@ -862,11 +915,11 @@ pub mod ntwk {
                 dir: &str,
                 command: &str,
                 args: &[_rt::String],
-            ) -> Result<_rt::String, _rt::String> {
+            ) -> Result<CommandResult, _rt::String> {
                 unsafe {
                     #[repr(align(4))]
-                    struct RetArea([::core::mem::MaybeUninit<u8>; 12]);
-                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 12]);
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 28]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 28]);
                     let vec0 = dir;
                     let ptr0 = vec0.as_ptr().cast::<u8>();
                     let len0 = vec0.len();
@@ -941,29 +994,68 @@ pub mod ntwk {
                     match l5 {
                         0 => {
                             let e = {
-                                let l6 = *ptr4.add(4).cast::<*mut u8>();
-                                let l7 = *ptr4.add(8).cast::<usize>();
-                                let len8 = l7;
-                                let bytes8 = _rt::Vec::from_raw_parts(
-                                    l6.cast(),
-                                    len8,
-                                    len8,
-                                );
-                                _rt::string_lift(bytes8)
+                                let l6 = i32::from(*ptr4.add(4).cast::<u8>());
+                                let v17 = match l6 {
+                                    0 => {
+                                        let e17 = {
+                                            let l7 = *ptr4.add(8).cast::<*mut u8>();
+                                            let l8 = *ptr4.add(12).cast::<usize>();
+                                            let len9 = l8;
+                                            let bytes9 = _rt::Vec::from_raw_parts(
+                                                l7.cast(),
+                                                len9,
+                                                len9,
+                                            );
+                                            let l10 = *ptr4.add(16).cast::<*mut u8>();
+                                            let l11 = *ptr4.add(20).cast::<usize>();
+                                            let len12 = l11;
+                                            let bytes12 = _rt::Vec::from_raw_parts(
+                                                l10.cast(),
+                                                len12,
+                                                len12,
+                                            );
+                                            let l13 = *ptr4.add(24).cast::<i32>();
+                                            CommandSuccess {
+                                                stdout: _rt::string_lift(bytes9),
+                                                stderr: _rt::string_lift(bytes12),
+                                                exit_code: l13 as u32,
+                                            }
+                                        };
+                                        CommandResult::Success(e17)
+                                    }
+                                    n => {
+                                        debug_assert_eq!(n, 1, "invalid enum discriminant");
+                                        let e17 = {
+                                            let l14 = *ptr4.add(8).cast::<*mut u8>();
+                                            let l15 = *ptr4.add(12).cast::<usize>();
+                                            let len16 = l15;
+                                            let bytes16 = _rt::Vec::from_raw_parts(
+                                                l14.cast(),
+                                                len16,
+                                                len16,
+                                            );
+                                            CommandError {
+                                                message: _rt::string_lift(bytes16),
+                                            }
+                                        };
+                                        CommandResult::Error(e17)
+                                    }
+                                };
+                                v17
                             };
                             Ok(e)
                         }
                         1 => {
                             let e = {
-                                let l9 = *ptr4.add(4).cast::<*mut u8>();
-                                let l10 = *ptr4.add(8).cast::<usize>();
-                                let len11 = l10;
-                                let bytes11 = _rt::Vec::from_raw_parts(
-                                    l9.cast(),
-                                    len11,
-                                    len11,
+                                let l18 = *ptr4.add(4).cast::<*mut u8>();
+                                let l19 = *ptr4.add(8).cast::<usize>();
+                                let len20 = l19;
+                                let bytes20 = _rt::Vec::from_raw_parts(
+                                    l18.cast(),
+                                    len20,
+                                    len20,
                                 );
-                                _rt::string_lift(bytes11)
+                                _rt::string_lift(bytes20)
                             };
                             Err(e)
                         }
@@ -975,11 +1067,11 @@ pub mod ntwk {
             pub fn execute_nix_command(
                 dir: &str,
                 command: &str,
-            ) -> Result<_rt::String, _rt::String> {
+            ) -> Result<CommandResult, _rt::String> {
                 unsafe {
                     #[repr(align(4))]
-                    struct RetArea([::core::mem::MaybeUninit<u8>; 12]);
-                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 12]);
+                    struct RetArea([::core::mem::MaybeUninit<u8>; 28]);
+                    let mut ret_area = RetArea([::core::mem::MaybeUninit::uninit(); 28]);
                     let vec0 = dir;
                     let ptr0 = vec0.as_ptr().cast::<u8>();
                     let len0 = vec0.len();
@@ -1014,29 +1106,68 @@ pub mod ntwk {
                     match l3 {
                         0 => {
                             let e = {
-                                let l4 = *ptr2.add(4).cast::<*mut u8>();
-                                let l5 = *ptr2.add(8).cast::<usize>();
-                                let len6 = l5;
-                                let bytes6 = _rt::Vec::from_raw_parts(
-                                    l4.cast(),
-                                    len6,
-                                    len6,
-                                );
-                                _rt::string_lift(bytes6)
+                                let l4 = i32::from(*ptr2.add(4).cast::<u8>());
+                                let v15 = match l4 {
+                                    0 => {
+                                        let e15 = {
+                                            let l5 = *ptr2.add(8).cast::<*mut u8>();
+                                            let l6 = *ptr2.add(12).cast::<usize>();
+                                            let len7 = l6;
+                                            let bytes7 = _rt::Vec::from_raw_parts(
+                                                l5.cast(),
+                                                len7,
+                                                len7,
+                                            );
+                                            let l8 = *ptr2.add(16).cast::<*mut u8>();
+                                            let l9 = *ptr2.add(20).cast::<usize>();
+                                            let len10 = l9;
+                                            let bytes10 = _rt::Vec::from_raw_parts(
+                                                l8.cast(),
+                                                len10,
+                                                len10,
+                                            );
+                                            let l11 = *ptr2.add(24).cast::<i32>();
+                                            CommandSuccess {
+                                                stdout: _rt::string_lift(bytes7),
+                                                stderr: _rt::string_lift(bytes10),
+                                                exit_code: l11 as u32,
+                                            }
+                                        };
+                                        CommandResult::Success(e15)
+                                    }
+                                    n => {
+                                        debug_assert_eq!(n, 1, "invalid enum discriminant");
+                                        let e15 = {
+                                            let l12 = *ptr2.add(8).cast::<*mut u8>();
+                                            let l13 = *ptr2.add(12).cast::<usize>();
+                                            let len14 = l13;
+                                            let bytes14 = _rt::Vec::from_raw_parts(
+                                                l12.cast(),
+                                                len14,
+                                                len14,
+                                            );
+                                            CommandError {
+                                                message: _rt::string_lift(bytes14),
+                                            }
+                                        };
+                                        CommandResult::Error(e15)
+                                    }
+                                };
+                                v15
                             };
                             Ok(e)
                         }
                         1 => {
                             let e = {
-                                let l7 = *ptr2.add(4).cast::<*mut u8>();
-                                let l8 = *ptr2.add(8).cast::<usize>();
-                                let len9 = l8;
-                                let bytes9 = _rt::Vec::from_raw_parts(
-                                    l7.cast(),
-                                    len9,
-                                    len9,
+                                let l16 = *ptr2.add(4).cast::<*mut u8>();
+                                let l17 = *ptr2.add(8).cast::<usize>();
+                                let len18 = l17;
+                                let bytes18 = _rt::Vec::from_raw_parts(
+                                    l16.cast(),
+                                    len18,
+                                    len18,
                                 );
-                                _rt::string_lift(bytes9)
+                                _rt::string_lift(bytes18)
                             };
                             Err(e)
                         }
@@ -2867,8 +2998,8 @@ pub(crate) use __export_runtime_content_fs_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[link_section = "component-type:wit-bindgen:0.36.0:ntwk:theater:runtime-content-fs:encoded world"]
 #[doc(hidden)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 2292] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xeb\x10\x01A\x02\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 2417] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xe8\x11\x01A\x02\x01\
 A\x15\x01B\x14\x01p}\x04\0\x04json\x03\0\0\x01p}\x01k\x02\x04\0\x05state\x03\0\x03\
 \x01s\x04\0\x08actor-id\x03\0\x05\x01s\x04\0\x0achannel-id\x03\0\x07\x01k\x01\x01\
 r\x02\x08accepted\x7f\x07message\x09\x04\0\x0echannel-accept\x03\0\x0a\x01kw\x01\
@@ -2886,44 +3017,47 @@ j\x01\x01\x01s\x01@\x02\x08actor-id\x03\x03msg\x01\0\x08\x04\0\x07request\x01\x0
 \x01j\x01\x05\x01s\x01@\x02\x08actor-id\x03\x0binitial-msg\x01\0\x0a\x04\0\x0cop\
 en-channel\x01\x0b\x01@\x02\x0achannel-id\x05\x03msg\x01\0\x06\x04\0\x0fsend-on-\
 channel\x01\x0c\x01@\x01\x0achannel-id\x05\0\x06\x04\0\x0dclose-channel\x01\x0d\x03\
-\0\x20ntwk:theater/message-server-host\x05\x06\x01B\x17\x01p}\x01j\x01\0\x01s\x01\
-@\x01\x04paths\0\x01\x04\0\x09read-file\x01\x02\x01j\0\x01s\x01@\x02\x04paths\x07\
-contents\0\x03\x04\0\x0awrite-file\x01\x04\x01ps\x01j\x01\x05\x01s\x01@\x01\x04p\
-aths\0\x06\x04\0\x0alist-files\x01\x07\x01@\x01\x04paths\0\x03\x04\0\x0bdelete-f\
-ile\x01\x08\x04\0\x0acreate-dir\x01\x08\x04\0\x0adelete-dir\x01\x08\x01j\x01\x7f\
-\x01s\x01@\x01\x04paths\0\x09\x04\0\x0bpath-exists\x01\x0a\x01j\x01s\x01s\x01@\x03\
-\x03dirs\x07commands\x04args\x05\0\x0b\x04\0\x0fexecute-command\x01\x0c\x01@\x02\
-\x03dirs\x07commands\0\x0b\x04\0\x13execute-nix-command\x01\x0d\x03\0\x17ntwk:th\
-eater/filesystem\x05\x07\x01B(\x01r\x01\x04hashs\x04\0\x0bcontent-ref\x03\0\0\x01\
-j\x01s\x01s\x01@\0\0\x02\x04\0\x03new\x01\x03\x01p}\x01j\x01\x01\x01s\x01@\x02\x08\
-store-ids\x07content\x04\0\x05\x04\0\x05store\x01\x06\x01j\x01\x04\x01s\x01@\x02\
-\x08store-ids\x0bcontent-ref\x01\0\x07\x04\0\x03get\x01\x08\x01j\x01\x7f\x01s\x01\
-@\x02\x08store-ids\x0bcontent-ref\x01\0\x09\x04\0\x06exists\x01\x0a\x01j\0\x01s\x01\
-@\x03\x08store-ids\x05labels\x0bcontent-ref\x01\0\x0b\x04\0\x05label\x01\x0c\x01\
-k\x01\x01j\x01\x0d\x01s\x01@\x02\x08store-ids\x05labels\0\x0e\x04\0\x0cget-by-la\
-bel\x01\x0f\x01@\x02\x08store-ids\x05labels\0\x0b\x04\0\x0cremove-label\x01\x10\x04\
-\0\x11remove-from-label\x01\x0c\x01@\x03\x08store-ids\x05labels\x07content\x04\0\
-\x05\x04\0\x0estore-at-label\x01\x11\x04\0\x18replace-content-at-label\x01\x11\x04\
-\0\x10replace-at-label\x01\x0c\x01ps\x01j\x01\x12\x01s\x01@\x01\x08store-ids\0\x13\
-\x04\0\x0blist-labels\x01\x14\x01p\x01\x01j\x01\x15\x01s\x01@\x01\x08store-ids\0\
-\x16\x04\0\x10list-all-content\x01\x17\x01j\x01w\x01s\x01@\x01\x08store-ids\0\x18\
-\x04\0\x14calculate-total-size\x01\x19\x03\0\x12ntwk:theater/store\x05\x08\x02\x03\
-\0\0\x05event\x02\x03\0\0\x0echannel-accept\x01B\x1d\x02\x03\x02\x01\x01\x04\0\x04\
-json\x03\0\0\x02\x03\x02\x01\x09\x04\0\x05event\x03\0\x02\x02\x03\x02\x01\x05\x04\
-\0\x0achannel-id\x03\0\x04\x02\x03\x02\x01\x0a\x04\0\x0echannel-accept\x03\0\x06\
-\x01k\x01\x01o\x01\x01\x01o\x01\x08\x01j\x01\x0a\x01s\x01@\x02\x05state\x08\x06p\
-arams\x09\0\x0b\x04\0\x0bhandle-send\x01\x0c\x01o\x02\x08\x09\x01j\x01\x0d\x01s\x01\
-@\x02\x05state\x08\x06params\x09\0\x0e\x04\0\x0ehandle-request\x01\x0f\x01o\x01\x07\
-\x01o\x02\x08\x10\x01j\x01\x11\x01s\x01@\x02\x05state\x08\x06params\x09\0\x12\x04\
-\0\x13handle-channel-open\x01\x13\x01o\x02\x05\x01\x01@\x02\x05state\x08\x06para\
-ms\x14\0\x0b\x04\0\x16handle-channel-message\x01\x15\x01o\x01\x05\x01@\x02\x05st\
-ate\x08\x06params\x16\0\x0b\x04\0\x14handle-channel-close\x01\x17\x04\0\"ntwk:th\
-eater/message-server-client\x05\x0b\x02\x03\0\0\x05state\x01B\x07\x02\x03\x02\x01\
-\x0c\x04\0\x05state\x03\0\0\x01o\x01s\x01o\x01\x01\x01j\x01\x03\x01s\x01@\x02\x05\
-state\x01\x06params\x02\0\x04\x04\0\x04init\x01\x05\x04\0\x12ntwk:theater/actor\x05\
-\x0d\x04\0\x1fntwk:theater/runtime-content-fs\x04\0\x0b\x18\x01\0\x12runtime-con\
-tent-fs\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.22\
-0.1\x10wit-bindgen-rust\x060.36.0";
+\0\x20ntwk:theater/message-server-host\x05\x06\x01B\x1d\x01r\x03\x06stdouts\x06s\
+tderrs\x09exit-codey\x04\0\x0fcommand-success\x03\0\0\x01r\x01\x07messages\x04\0\
+\x0dcommand-error\x03\0\x02\x01q\x02\x07success\x01\x01\0\x05error\x01\x03\0\x04\
+\0\x0ecommand-result\x03\0\x04\x01p}\x01j\x01\x06\x01s\x01@\x01\x04paths\0\x07\x04\
+\0\x09read-file\x01\x08\x01j\0\x01s\x01@\x02\x04paths\x07contents\0\x09\x04\0\x0a\
+write-file\x01\x0a\x01ps\x01j\x01\x0b\x01s\x01@\x01\x04paths\0\x0c\x04\0\x0alist\
+-files\x01\x0d\x01@\x01\x04paths\0\x09\x04\0\x0bdelete-file\x01\x0e\x04\0\x0acre\
+ate-dir\x01\x0e\x04\0\x0adelete-dir\x01\x0e\x01j\x01\x7f\x01s\x01@\x01\x04paths\0\
+\x0f\x04\0\x0bpath-exists\x01\x10\x01j\x01\x05\x01s\x01@\x03\x03dirs\x07commands\
+\x04args\x0b\0\x11\x04\0\x0fexecute-command\x01\x12\x01@\x02\x03dirs\x07commands\
+\0\x11\x04\0\x13execute-nix-command\x01\x13\x03\0\x17ntwk:theater/filesystem\x05\
+\x07\x01B(\x01r\x01\x04hashs\x04\0\x0bcontent-ref\x03\0\0\x01j\x01s\x01s\x01@\0\0\
+\x02\x04\0\x03new\x01\x03\x01p}\x01j\x01\x01\x01s\x01@\x02\x08store-ids\x07conte\
+nt\x04\0\x05\x04\0\x05store\x01\x06\x01j\x01\x04\x01s\x01@\x02\x08store-ids\x0bc\
+ontent-ref\x01\0\x07\x04\0\x03get\x01\x08\x01j\x01\x7f\x01s\x01@\x02\x08store-id\
+s\x0bcontent-ref\x01\0\x09\x04\0\x06exists\x01\x0a\x01j\0\x01s\x01@\x03\x08store\
+-ids\x05labels\x0bcontent-ref\x01\0\x0b\x04\0\x05label\x01\x0c\x01k\x01\x01j\x01\
+\x0d\x01s\x01@\x02\x08store-ids\x05labels\0\x0e\x04\0\x0cget-by-label\x01\x0f\x01\
+@\x02\x08store-ids\x05labels\0\x0b\x04\0\x0cremove-label\x01\x10\x04\0\x11remove\
+-from-label\x01\x0c\x01@\x03\x08store-ids\x05labels\x07content\x04\0\x05\x04\0\x0e\
+store-at-label\x01\x11\x04\0\x18replace-content-at-label\x01\x11\x04\0\x10replac\
+e-at-label\x01\x0c\x01ps\x01j\x01\x12\x01s\x01@\x01\x08store-ids\0\x13\x04\0\x0b\
+list-labels\x01\x14\x01p\x01\x01j\x01\x15\x01s\x01@\x01\x08store-ids\0\x16\x04\0\
+\x10list-all-content\x01\x17\x01j\x01w\x01s\x01@\x01\x08store-ids\0\x18\x04\0\x14\
+calculate-total-size\x01\x19\x03\0\x12ntwk:theater/store\x05\x08\x02\x03\0\0\x05\
+event\x02\x03\0\0\x0echannel-accept\x01B\x1d\x02\x03\x02\x01\x01\x04\0\x04json\x03\
+\0\0\x02\x03\x02\x01\x09\x04\0\x05event\x03\0\x02\x02\x03\x02\x01\x05\x04\0\x0ac\
+hannel-id\x03\0\x04\x02\x03\x02\x01\x0a\x04\0\x0echannel-accept\x03\0\x06\x01k\x01\
+\x01o\x01\x01\x01o\x01\x08\x01j\x01\x0a\x01s\x01@\x02\x05state\x08\x06params\x09\
+\0\x0b\x04\0\x0bhandle-send\x01\x0c\x01o\x02\x08\x09\x01j\x01\x0d\x01s\x01@\x02\x05\
+state\x08\x06params\x09\0\x0e\x04\0\x0ehandle-request\x01\x0f\x01o\x01\x07\x01o\x02\
+\x08\x10\x01j\x01\x11\x01s\x01@\x02\x05state\x08\x06params\x09\0\x12\x04\0\x13ha\
+ndle-channel-open\x01\x13\x01o\x02\x05\x01\x01@\x02\x05state\x08\x06params\x14\0\
+\x0b\x04\0\x16handle-channel-message\x01\x15\x01o\x01\x05\x01@\x02\x05state\x08\x06\
+params\x16\0\x0b\x04\0\x14handle-channel-close\x01\x17\x04\0\"ntwk:theater/messa\
+ge-server-client\x05\x0b\x02\x03\0\0\x05state\x01B\x07\x02\x03\x02\x01\x0c\x04\0\
+\x05state\x03\0\0\x01o\x01s\x01o\x01\x01\x01j\x01\x03\x01s\x01@\x02\x05state\x01\
+\x06params\x02\0\x04\x04\0\x04init\x01\x05\x04\0\x12ntwk:theater/actor\x05\x0d\x04\
+\0\x1fntwk:theater/runtime-content-fs\x04\0\x0b\x18\x01\0\x12runtime-content-fs\x03\
+\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.220.1\x10wit-\
+bindgen-rust\x060.36.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {
